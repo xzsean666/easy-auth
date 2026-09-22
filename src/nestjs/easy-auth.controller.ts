@@ -253,7 +253,7 @@ export class EasyAuthController {
   }
 
   /**
-   * Update current authenticated user's metadata (e.g. bind EVM address, profile fields).
+   * Update current authenticated user's metadata (e.g. bind EVM address, profile fields, custom attributes).
    * PATCH /api/auth/metadata
    * POST /api/auth/metadata
    */
@@ -270,19 +270,9 @@ export class EasyAuthController {
     }
 
     const patch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
-    const isAdmin = user.metadata?.role === "admin" || user.metadata?.isAdmin === true;
-
-    // Security: Prevent regular non-admin users from granting themselves admin privileges via metadata
-    const sanitizedPatch: Record<string, any> = { ...patch };
-    if (!isAdmin) {
-      delete sanitizedPatch.role;
-      delete sanitizedPatch.isAdmin;
-      delete sanitizedPatch.roles;
-      delete sanitizedPatch.permissions;
-    }
 
     try {
-      const updatedUser = await this.authService.updateUserMetadata(user.id, sanitizedPatch);
+      const updatedUser = await this.authService.updateUserMetadata(user.id, patch);
       return {
         statusCode: HttpStatus.OK,
         user: updatedUser,
@@ -303,104 +293,5 @@ export class EasyAuthController {
     @Body() body: any
   ) {
     return this.updateMyMetadata(user, body);
-  }
-
-  /**
-   * Update target user's metadata by an administrator.
-   * PATCH /api/auth/admin/users/:userId/metadata
-   */
-  @Patch("admin/users/:userId/metadata")
-  async updateAdminUserMetadata(
-    @Param("userId") targetUserId: string,
-    @CurrentUser() currentUser: User,
-    @Body() body: any
-  ) {
-    if (!currentUser) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-
-    const isAdmin =
-      currentUser.metadata?.role === "admin" ||
-      currentUser.metadata?.isAdmin === true ||
-      (Array.isArray(currentUser.metadata?.roles) && currentUser.metadata?.roles.includes("admin"));
-
-    if (!isAdmin) {
-      throw new HttpException(
-        { statusCode: 403, error: "FORBIDDEN", message: "Admin privileges required to update user metadata" },
-        HttpStatus.FORBIDDEN
-      );
-    }
-
-    const patch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
-
-    try {
-      const updatedUser = await this.authService.updateUserMetadata(targetUserId, patch);
-      return {
-        statusCode: HttpStatus.OK,
-        user: updatedUser,
-        metadata: updatedUser.metadata,
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-
-  /**
-   * Alias for updateAdminUserMetadata using POST.
-   * POST /api/auth/admin/users/:userId/metadata
-   */
-  @Post("admin/users/:userId/metadata")
-  async updateAdminUserMetadataPost(
-    @Param("userId") targetUserId: string,
-    @CurrentUser() currentUser: User,
-    @Body() body: any
-  ) {
-    return this.updateAdminUserMetadata(targetUserId, currentUser, body);
-  }
-
-  /**
-   * Bootstrap initial admin account using a configured server secret.
-   * POST /api/auth/admin/bootstrap
-   */
-  @Public()
-  @Post("admin/bootstrap")
-  async bootstrapAdmin(@Body() body: { userId: string; secret: string }) {
-    const expectedSecret =
-      this.authService.options.adminBootstrapSecret ||
-      process.env.ADMIN_BOOTSTRAP_SECRET ||
-      process.env.EASY_AUTH_BOOTSTRAP_SECRET;
-
-    if (!expectedSecret || !body?.secret || body.secret !== expectedSecret) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Invalid or unconfigured bootstrap secret" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-
-    if (!body?.userId) {
-      throw new HttpException(
-        { statusCode: 400, error: "BAD_REQUEST", message: "Missing userId in request body" },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-
-    try {
-      const updatedUser = await this.authService.updateUserMetadata(body.userId, {
-        role: "admin",
-        isAdmin: true,
-        permissions: ["*"],
-      });
-      return {
-        statusCode: HttpStatus.OK,
-        success: true,
-        user: updatedUser,
-        metadata: updatedUser.metadata,
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
   }
 }

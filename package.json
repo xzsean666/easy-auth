@@ -19,7 +19,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "nestjs"
   ],
   "engines": {
     "node": ">=22.0.0"

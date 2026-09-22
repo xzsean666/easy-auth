@@ -21,11 +21,6 @@ export interface EasyAuthModuleOptions extends EasyAuthOptions {
    * Defaults to false.
    */
   globalGuard?: boolean;
-
-  /**
-   * Optional secret for bootstrapping the initial administrator account.
-   */
-  adminBootstrapSecret?: string;
 }
 
 @Injectable()

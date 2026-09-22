@@ -165,7 +165,7 @@ describe("NestJS Integration (EasyAuthModule)", () => {
       ).rejects.toThrow();
     });
 
-    it("should allow user to update metadata (e.g. bind EVM address)", async () => {
+    it("should allow user to update metadata (e.g. bind EVM address, custom attributes)", async () => {
       const loginRes = await authController.login({
         provider: "test-provider",
         credentials: { username: "meta_user" },
@@ -174,47 +174,15 @@ describe("NestJS Integration (EasyAuthModule)", () => {
       const updateRes = await authController.updateMyMetadata(loginRes.user, {
         wallet_address: "0x1234567890123456789012345678901234567890",
         bio: "Web3 Builder",
-        role: "admin", // regular user cannot elevate role
+        role: "admin",
+        isAdmin: true,
       });
 
       expect(updateRes.statusCode).toBe(200);
       expect(updateRes.metadata.wallet_address).toBe("0x1234567890123456789012345678901234567890");
       expect(updateRes.metadata.bio).toBe("Web3 Builder");
-      expect(updateRes.metadata.role).toBeUndefined(); // stripped
-    });
-
-    it("should allow bootstrapping admin and updating user metadata as admin", async () => {
-      const userRes = await authController.login({
-        provider: "test-provider",
-        credentials: { username: "target_user" },
-      });
-
-      // Bootstrap admin
-      process.env.ADMIN_BOOTSTRAP_SECRET = "super-secret-bootstrap";
-      const bootRes = await authController.bootstrapAdmin({
-        userId: userRes.user.id,
-        secret: "super-secret-bootstrap",
-      });
-
-      expect(bootRes.statusCode).toBe(200);
-      expect(bootRes.metadata.role).toBe("admin");
-      expect(bootRes.metadata.isAdmin).toBe(true);
-
-      // Now target_user is admin, they can update other users' roles
-      const user2 = await authController.login({
-        provider: "test-provider",
-        credentials: { username: "second_user" },
-      });
-
-      const adminUpdateRes = await authController.updateAdminUserMetadata(
-        user2.user.id,
-        bootRes.user,
-        { role: "moderator", customPerm: true }
-      );
-
-      expect(adminUpdateRes.statusCode).toBe(200);
-      expect(adminUpdateRes.metadata.role).toBe("moderator");
-      expect(adminUpdateRes.metadata.customPerm).toBe(true);
+      expect(updateRes.metadata.role).toBe("admin");
+      expect(updateRes.metadata.isAdmin).toBe(true);
     });
   });
 

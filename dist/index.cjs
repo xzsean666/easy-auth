@@ -6,14 +6,27 @@ var fs = require('fs');
 var module$1 = require('module');
 var jose = require('jose');
 var viem = require('viem');
+var common = require('@nestjs/common');
+var core = require('@nestjs/core');
 
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
   get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
 }) : x)(function(x) {
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
+var __decorateClass = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
+  for (var i = decorators.length - 1, decorator; i >= 0; i--)
+    if (decorator = decorators[i])
+      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+  if (kind && result) __defProp(target, key, result);
+  return result;
+};
+var __decorateParam = (index, decorator) => (target, key) => decorator(target, key, index);
 
 // src/core/errors.ts
 var ERROR_STATUS_MAP = {
@@ -1938,10 +1951,440 @@ var TotpProvider = class _TotpProvider {
   }
 };
 
+// src/nestjs/constants.ts
+var EASY_AUTH_OPTIONS = "EASY_AUTH_OPTIONS";
+var IS_PUBLIC_KEY = "easy_auth:is_public";
+exports.EasyAuthService = class EasyAuthService {
+  constructor(options) {
+    this.options = options;
+    this.auth = new EasyAuth(options);
+  }
+  options;
+  auth;
+  /**
+   * Authenticate a user with third-party credentials.
+   */
+  async authenticate(provider, credentials) {
+    return this.auth.authenticate(provider, credentials);
+  }
+  /**
+   * Verify an incoming JWT bearer token and extract user & metadata.
+   */
+  async verify(token, options) {
+    return this.auth.verify(token, options);
+  }
+  /**
+   * Link a new third-party identity to an existing user account.
+   */
+  async linkIdentity(userId, provider, credentials) {
+    return this.auth.linkIdentity(userId, provider, credentials);
+  }
+  /**
+   * Unlink a third-party identity with anti-lockout protection.
+   */
+  async unlinkIdentity(userId, provider, providerUserId) {
+    return this.auth.unlinkIdentity(userId, provider, providerUserId);
+  }
+  /**
+   * Get user by ID.
+   */
+  async getUser(id) {
+    return this.auth.storage.getUserById(id);
+  }
+  /**
+   * List all identities linked to a user.
+   */
+  async listIdentities(userId) {
+    return this.auth.storage.listIdentitiesByUserId(userId);
+  }
+  /**
+   * Generates a single-use cryptographically random nonce for Web3 authentication anti-replay.
+   */
+  generateNonce(address, ttlMs) {
+    return this.auth.generateNonce(address, ttlMs);
+  }
+  /**
+   * Validates and consumes a single-use nonce.
+   */
+  consumeNonce(nonce, address) {
+    return this.auth.consumeNonce(nonce, address);
+  }
+  /**
+   * Updates user metadata.
+   */
+  async updateUserMetadata(userId, patch) {
+    return this.auth.updateUserMetadata(userId, patch);
+  }
+  /**
+   * Alias for updateUserMetadata.
+   */
+  async updateMetadata(userId, patch) {
+    return this.auth.updateUserMetadata(userId, patch);
+  }
+};
+exports.EasyAuthService = __decorateClass([
+  common.Injectable(),
+  __decorateParam(0, common.Inject(EASY_AUTH_OPTIONS))
+], exports.EasyAuthService);
+exports.EasyAuthGuard = class EasyAuthGuard {
+  constructor(authService, reflector) {
+    this.authService = authService;
+    this.reflector = reflector;
+  }
+  authService;
+  reflector;
+  async canActivate(context) {
+    if (this.reflector) {
+      const isPublic = this.reflector.getAllAndOverride(IS_PUBLIC_KEY, [
+        context.getHandler(),
+        context.getClass()
+      ]);
+      if (isPublic) {
+        return true;
+      }
+    }
+    const request = context.switchToHttp().getRequest();
+    const authHeader = request.headers?.authorization;
+    if (!authHeader || typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
+      throw new common.UnauthorizedException("Missing or malformed Authorization header with Bearer token");
+    }
+    const token = authHeader.slice(7).trim();
+    if (!token) {
+      throw new common.UnauthorizedException("Empty Bearer token provided");
+    }
+    try {
+      const verifyResult = await this.authService.verify(token);
+      request.user = verifyResult.user;
+      request.userId = verifyResult.userId;
+      request.userMetadata = verifyResult.metadata;
+      request.authPayload = verifyResult.payload;
+      return true;
+    } catch (err) {
+      throw new common.UnauthorizedException(err.message || "Invalid or expired authentication token");
+    }
+  }
+};
+exports.EasyAuthGuard = __decorateClass([
+  common.Injectable(),
+  __decorateParam(0, common.Inject(exports.EasyAuthService)),
+  __decorateParam(1, common.Optional()),
+  __decorateParam(1, common.Inject(core.Reflector))
+], exports.EasyAuthGuard);
+var CurrentUser = common.createParamDecorator(
+  (data, ctx) => {
+    const request = ctx.switchToHttp().getRequest();
+    const user = request.user;
+    if (!user) {
+      return null;
+    }
+    return data ? user[data] : user;
+  }
+);
+var Public = () => common.SetMetadata(IS_PUBLIC_KEY, true);
+
+// src/nestjs/easy-auth.controller.ts
+exports.EasyAuthController = class EasyAuthController {
+  constructor(authService) {
+    this.authService = authService;
+  }
+  authService;
+  handleError(err) {
+    if (err instanceof EasyAuthError) {
+      throw new common.HttpException(
+        {
+          statusCode: err.statusCode,
+          error: err.code,
+          message: err.message
+        },
+        err.statusCode
+      );
+    }
+    throw new common.HttpException(
+      {
+        statusCode: common.HttpStatus.INTERNAL_SERVER_ERROR,
+        message: err?.message || "Internal authentication error"
+      },
+      common.HttpStatus.INTERNAL_SERVER_ERROR
+    );
+  }
+  getNonce(address) {
+    const nonce = this.authService.generateNonce(address);
+    return {
+      statusCode: common.HttpStatus.OK,
+      nonce,
+      address: address ? address.toLowerCase() : void 0,
+      expiresIn: 300
+    };
+  }
+  async login(body) {
+    const loginType = body?.loginType || body?.type || body?.provider;
+    if (!loginType || !body?.credentials) {
+      throw new common.HttpException(
+        { statusCode: 400, error: "BAD_REQUEST", message: "Missing loginType (or provider) and credentials in request body" },
+        common.HttpStatus.BAD_REQUEST
+      );
+    }
+    try {
+      const result = await this.authService.authenticate(loginType, body.credentials);
+      return {
+        statusCode: common.HttpStatus.OK,
+        loginType: result.loginType,
+        user: result.user,
+        token: result.token,
+        isNewUser: result.isNewUser,
+        identity: result.identity
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async link(body, currentUserId) {
+    const provider = body?.loginType || body?.type || body?.provider;
+    if (!provider || !body?.credentials) {
+      throw new common.HttpException(
+        { statusCode: 400, error: "BAD_REQUEST", message: "Missing loginType (or provider), or credentials in request body" },
+        common.HttpStatus.BAD_REQUEST
+      );
+    }
+    if (body?.userId && currentUserId && body.userId !== currentUserId) {
+      throw new common.HttpException(
+        { statusCode: 403, error: "FORBIDDEN", message: "Cannot link identity to another user account" },
+        common.HttpStatus.FORBIDDEN
+      );
+    }
+    const targetUserId = currentUserId || body?.userId;
+    if (!targetUserId) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to link an identity" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    try {
+      const identity = await this.authService.linkIdentity(targetUserId, provider, body.credentials);
+      return {
+        statusCode: common.HttpStatus.OK,
+        identity
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async unlink(body, currentUserId) {
+    const provider = body?.loginType || body?.type || body?.provider;
+    if (!provider || !body?.providerUserId) {
+      throw new common.HttpException(
+        { statusCode: 400, error: "BAD_REQUEST", message: "Missing loginType (or provider), or providerUserId in request body" },
+        common.HttpStatus.BAD_REQUEST
+      );
+    }
+    if (body?.userId && currentUserId && body.userId !== currentUserId) {
+      throw new common.HttpException(
+        { statusCode: 403, error: "FORBIDDEN", message: "Cannot unlink identity from another user account" },
+        common.HttpStatus.FORBIDDEN
+      );
+    }
+    const targetUserId = currentUserId || body?.userId;
+    if (!targetUserId) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to unlink an identity" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    try {
+      await this.authService.unlinkIdentity(targetUserId, provider, body.providerUserId);
+      return {
+        statusCode: common.HttpStatus.OK,
+        success: true
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async me(authHeader, user) {
+    if (user) {
+      return {
+        statusCode: common.HttpStatus.OK,
+        userId: user.id,
+        user,
+        metadata: user.metadata
+      };
+    }
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Missing or invalid Authorization header" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    const token = authHeader.slice(7).trim();
+    try {
+      const result = await this.authService.verify(token);
+      return {
+        statusCode: common.HttpStatus.OK,
+        userId: result.userId,
+        user: result.user,
+        metadata: result.metadata
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async listIdentities(userId, currentUserId) {
+    if (userId && currentUserId && userId !== currentUserId) {
+      throw new common.HttpException(
+        { statusCode: 403, error: "FORBIDDEN", message: "Cannot view identities of another user account" },
+        common.HttpStatus.FORBIDDEN
+      );
+    }
+    const targetUserId = currentUserId || userId;
+    if (!targetUserId) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to view identities" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    try {
+      const identities = await this.authService.listIdentities(targetUserId);
+      return {
+        statusCode: common.HttpStatus.OK,
+        identities
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async updateMyMetadata(user, body) {
+    if (!user) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to update metadata" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    const patch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
+    try {
+      const updatedUser = await this.authService.updateUserMetadata(user.id, patch);
+      return {
+        statusCode: common.HttpStatus.OK,
+        user: updatedUser,
+        metadata: updatedUser.metadata
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async updateMyMetadataPost(user, body) {
+    return this.updateMyMetadata(user, body);
+  }
+};
+__decorateClass([
+  Public(),
+  common.Get("nonce"),
+  __decorateParam(0, common.Query("address"))
+], exports.EasyAuthController.prototype, "getNonce", 1);
+__decorateClass([
+  Public(),
+  common.Post("login"),
+  __decorateParam(0, common.Body())
+], exports.EasyAuthController.prototype, "login", 1);
+__decorateClass([
+  common.Post("link"),
+  __decorateParam(0, common.Body()),
+  __decorateParam(1, CurrentUser("id"))
+], exports.EasyAuthController.prototype, "link", 1);
+__decorateClass([
+  common.Post("unlink"),
+  __decorateParam(0, common.Body()),
+  __decorateParam(1, CurrentUser("id"))
+], exports.EasyAuthController.prototype, "unlink", 1);
+__decorateClass([
+  common.Get("me"),
+  __decorateParam(0, common.Headers("authorization")),
+  __decorateParam(1, CurrentUser())
+], exports.EasyAuthController.prototype, "me", 1);
+__decorateClass([
+  common.Get("identities"),
+  __decorateParam(0, common.Query("userId")),
+  __decorateParam(1, CurrentUser("id"))
+], exports.EasyAuthController.prototype, "listIdentities", 1);
+__decorateClass([
+  common.Patch("metadata"),
+  __decorateParam(0, CurrentUser()),
+  __decorateParam(1, common.Body())
+], exports.EasyAuthController.prototype, "updateMyMetadata", 1);
+__decorateClass([
+  common.Post("metadata"),
+  __decorateParam(0, CurrentUser()),
+  __decorateParam(1, common.Body())
+], exports.EasyAuthController.prototype, "updateMyMetadataPost", 1);
+exports.EasyAuthController = __decorateClass([
+  common.Controller("api/auth"),
+  common.UseGuards(exports.EasyAuthGuard),
+  __decorateParam(0, common.Inject(exports.EasyAuthService))
+], exports.EasyAuthController);
+
+// src/nestjs/easy-auth.module.ts
+exports.EasyAuthModule = class EasyAuthModule {
+  /**
+   * Synchronous static registration of EasyAuthModule.
+   */
+  static forRoot(options) {
+    if (options.routePrefix) {
+      const cleanPrefix = options.routePrefix.replace(/^\/+|\/+$/g, "");
+      Reflect.defineMetadata("path", cleanPrefix, exports.EasyAuthController);
+    }
+    const controllers = options.disableController ? [] : [exports.EasyAuthController];
+    const providers = [
+      {
+        provide: EASY_AUTH_OPTIONS,
+        useValue: options
+      },
+      exports.EasyAuthService,
+      exports.EasyAuthGuard
+    ];
+    if (options.globalGuard) {
+      providers.push({
+        provide: core.APP_GUARD,
+        useClass: exports.EasyAuthGuard
+      });
+    }
+    return {
+      module: exports.EasyAuthModule,
+      controllers,
+      providers,
+      exports: [exports.EasyAuthService, exports.EasyAuthGuard]
+    };
+  }
+  /**
+   * Asynchronous registration of EasyAuthModule using factory function.
+   */
+  static forRootAsync(asyncOptions) {
+    const providers = [
+      {
+        provide: EASY_AUTH_OPTIONS,
+        useFactory: asyncOptions.useFactory,
+        inject: asyncOptions.inject || []
+      },
+      exports.EasyAuthService,
+      exports.EasyAuthGuard
+    ];
+    return {
+      module: exports.EasyAuthModule,
+      imports: asyncOptions.imports || [],
+      controllers: [exports.EasyAuthController],
+      providers,
+      exports: [exports.EasyAuthService, exports.EasyAuthGuard]
+    };
+  }
+};
+exports.EasyAuthModule = __decorateClass([
+  common.Global(),
+  common.Module({})
+], exports.EasyAuthModule);
+
 // src/index.ts
 var VERSION = "0.1.0";
 
 exports.AuthEngine = AuthEngine;
+exports.CurrentUser = CurrentUser;
 exports.EasyAuth = EasyAuth;
 exports.EasyAuthError = EasyAuthError;
 exports.GoogleOtpProvider = TotpProvider;
@@ -1952,6 +2395,7 @@ exports.MemoryStorageAdapter = MemoryStorageAdapter;
 exports.OAuth2BaseProvider = OAuth2BaseProvider;
 exports.PostgresStorageAdapter = PostgresStorageAdapter;
 exports.ProviderRegistry = ProviderRegistry;
+exports.Public = Public;
 exports.SqliteStorageAdapter = SqliteStorageAdapter;
 exports.TotpProvider = TotpProvider;
 exports.VERSION = VERSION;

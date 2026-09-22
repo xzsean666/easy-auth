@@ -84,4 +84,13 @@ export type {
   TotpProfile,
 } from "./providers/totp/index.js";
 
+// NestJS Integration
+export { EasyAuthModule } from "./nestjs/easy-auth.module.js";
+export type { EasyAuthModuleAsyncOptions } from "./nestjs/easy-auth.module.js";
+export { EasyAuthService } from "./nestjs/easy-auth.service.js";
+export type { EasyAuthModuleOptions } from "./nestjs/easy-auth.service.js";
+export { EasyAuthController } from "./nestjs/easy-auth.controller.js";
+export { EasyAuthGuard } from "./nestjs/easy-auth.guard.js";
+export { Public, CurrentUser } from "./nestjs/decorators.js";
+
 export const VERSION = "0.1.0";

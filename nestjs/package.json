@@ -1,0 +1,6 @@
+{
+  "name": "easy-auth/nestjs",
+  "main": "../dist/nestjs/index.cjs",
+  "module": "../dist/nestjs/index.mjs",
+  "types": "../dist/nestjs/index.d.ts"
+}

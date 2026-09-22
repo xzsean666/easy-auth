@@ -1,6 +1,8 @@
-import { S as StorageAdapter, C as CreateUserData, U as User, a as CreateIdentityData, I as Identity, A as AuthProvider, E as ExtractedIdentity } from './easy-auth-91JYYcLB.cjs';
-export { b as AuthEngine, c as AuthEngineDependencies, d as AuthResult, D as DatabaseConfig, e as EasyAuth, f as EasyAuthJwtPayload, g as EasyAuthOptions, F as FunctionalAuthProvider, J as JwtConfig, h as JwtService, P as ProviderRegistry, i as SignJwtOptions, V as VerifyOptions, j as VerifyResult, W as Web3Credentials, k as Web3Profile, l as Web3Provider, m as Web3ProviderOptions } from './easy-auth-91JYYcLB.cjs';
+import { S as StorageAdapter, C as CreateUserData, U as User, a as CreateIdentityData, I as Identity, A as AuthProvider, E as ExtractedIdentity } from './decorators-DxYiHXOI.cjs';
+export { b as AuthEngine, c as AuthEngineDependencies, d as AuthResult, e as CurrentUser, D as DatabaseConfig, f as EasyAuth, g as EasyAuthController, h as EasyAuthGuard, i as EasyAuthJwtPayload, j as EasyAuthModule, k as EasyAuthModuleAsyncOptions, l as EasyAuthModuleOptions, m as EasyAuthOptions, n as EasyAuthService, F as FunctionalAuthProvider, J as JwtConfig, o as JwtService, P as ProviderRegistry, p as Public, q as SignJwtOptions, V as VerifyOptions, r as VerifyResult, W as Web3Credentials, s as Web3Profile, t as Web3Provider, u as Web3ProviderOptions } from './decorators-DxYiHXOI.cjs';
 import { DatabaseSync } from 'node:sqlite';
+import '@nestjs/common';
+import '@nestjs/core';
 
 /**
  * Easy Auth Error Code definitions
