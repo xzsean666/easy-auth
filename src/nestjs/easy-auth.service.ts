@@ -21,6 +21,11 @@ export interface EasyAuthModuleOptions extends EasyAuthOptions {
    * Defaults to false.
    */
   globalGuard?: boolean;
+
+  /**
+   * Optional secret for bootstrapping the initial administrator account.
+   */
+  adminBootstrapSecret?: string;
 }
 
 @Injectable()
@@ -85,5 +90,19 @@ export class EasyAuthService {
    */
   consumeNonce(nonce: string, address?: string): boolean {
     return this.auth.consumeNonce(nonce, address);
+  }
+
+  /**
+   * Updates user metadata.
+   */
+  async updateUserMetadata(userId: string, patch: Record<string, any>): Promise<User> {
+    return this.auth.updateUserMetadata(userId, patch);
+  }
+
+  /**
+   * Alias for updateUserMetadata.
+   */
+  async updateMetadata(userId: string, patch: Record<string, any>): Promise<User> {
+    return this.auth.updateUserMetadata(userId, patch);
   }
 }

@@ -1379,6 +1379,18 @@ exports.EasyAuthService = class EasyAuthService {
   consumeNonce(nonce, address) {
     return this.auth.consumeNonce(nonce, address);
   }
+  /**
+   * Updates user metadata.
+   */
+  async updateUserMetadata(userId, patch) {
+    return this.auth.updateUserMetadata(userId, patch);
+  }
+  /**
+   * Alias for updateUserMetadata.
+   */
+  async updateMetadata(userId, patch) {
+    return this.auth.updateUserMetadata(userId, patch);
+  }
 };
 exports.EasyAuthService = __decorateClass([
   common.Injectable(),
@@ -1610,6 +1622,95 @@ exports.EasyAuthController = class EasyAuthController {
       this.handleError(err);
     }
   }
+  async updateMyMetadata(user, body) {
+    if (!user) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to update metadata" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    const patch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
+    const isAdmin = user.metadata?.role === "admin" || user.metadata?.isAdmin === true;
+    const sanitizedPatch = { ...patch };
+    if (!isAdmin) {
+      delete sanitizedPatch.role;
+      delete sanitizedPatch.isAdmin;
+      delete sanitizedPatch.roles;
+      delete sanitizedPatch.permissions;
+    }
+    try {
+      const updatedUser = await this.authService.updateUserMetadata(user.id, sanitizedPatch);
+      return {
+        statusCode: common.HttpStatus.OK,
+        user: updatedUser,
+        metadata: updatedUser.metadata
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async updateMyMetadataPost(user, body) {
+    return this.updateMyMetadata(user, body);
+  }
+  async updateAdminUserMetadata(targetUserId, currentUser, body) {
+    if (!currentUser) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    const isAdmin = currentUser.metadata?.role === "admin" || currentUser.metadata?.isAdmin === true || Array.isArray(currentUser.metadata?.roles) && currentUser.metadata?.roles.includes("admin");
+    if (!isAdmin) {
+      throw new common.HttpException(
+        { statusCode: 403, error: "FORBIDDEN", message: "Admin privileges required to update user metadata" },
+        common.HttpStatus.FORBIDDEN
+      );
+    }
+    const patch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
+    try {
+      const updatedUser = await this.authService.updateUserMetadata(targetUserId, patch);
+      return {
+        statusCode: common.HttpStatus.OK,
+        user: updatedUser,
+        metadata: updatedUser.metadata
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async updateAdminUserMetadataPost(targetUserId, currentUser, body) {
+    return this.updateAdminUserMetadata(targetUserId, currentUser, body);
+  }
+  async bootstrapAdmin(body) {
+    const expectedSecret = this.authService.options.adminBootstrapSecret || process.env.ADMIN_BOOTSTRAP_SECRET || process.env.EASY_AUTH_BOOTSTRAP_SECRET;
+    if (!expectedSecret || !body?.secret || body.secret !== expectedSecret) {
+      throw new common.HttpException(
+        { statusCode: 401, error: "UNAUTHORIZED", message: "Invalid or unconfigured bootstrap secret" },
+        common.HttpStatus.UNAUTHORIZED
+      );
+    }
+    if (!body?.userId) {
+      throw new common.HttpException(
+        { statusCode: 400, error: "BAD_REQUEST", message: "Missing userId in request body" },
+        common.HttpStatus.BAD_REQUEST
+      );
+    }
+    try {
+      const updatedUser = await this.authService.updateUserMetadata(body.userId, {
+        role: "admin",
+        isAdmin: true,
+        permissions: ["*"]
+      });
+      return {
+        statusCode: common.HttpStatus.OK,
+        success: true,
+        user: updatedUser,
+        metadata: updatedUser.metadata
+      };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
 };
 __decorateClass([
   Public(),
@@ -1641,6 +1742,33 @@ __decorateClass([
   __decorateParam(0, common.Query("userId")),
   __decorateParam(1, CurrentUser("id"))
 ], exports.EasyAuthController.prototype, "listIdentities", 1);
+__decorateClass([
+  common.Patch("metadata"),
+  __decorateParam(0, CurrentUser()),
+  __decorateParam(1, common.Body())
+], exports.EasyAuthController.prototype, "updateMyMetadata", 1);
+__decorateClass([
+  common.Post("metadata"),
+  __decorateParam(0, CurrentUser()),
+  __decorateParam(1, common.Body())
+], exports.EasyAuthController.prototype, "updateMyMetadataPost", 1);
+__decorateClass([
+  common.Patch("admin/users/:userId/metadata"),
+  __decorateParam(0, common.Param("userId")),
+  __decorateParam(1, CurrentUser()),
+  __decorateParam(2, common.Body())
+], exports.EasyAuthController.prototype, "updateAdminUserMetadata", 1);
+__decorateClass([
+  common.Post("admin/users/:userId/metadata"),
+  __decorateParam(0, common.Param("userId")),
+  __decorateParam(1, CurrentUser()),
+  __decorateParam(2, common.Body())
+], exports.EasyAuthController.prototype, "updateAdminUserMetadataPost", 1);
+__decorateClass([
+  Public(),
+  common.Post("admin/bootstrap"),
+  __decorateParam(0, common.Body())
+], exports.EasyAuthController.prototype, "bootstrapAdmin", 1);
 exports.EasyAuthController = __decorateClass([
   common.Controller("api/auth"),
   common.UseGuards(exports.EasyAuthGuard),

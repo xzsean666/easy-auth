@@ -19,6 +19,10 @@ interface EasyAuthModuleOptions extends EasyAuthOptions {
      * Defaults to false.
      */
     globalGuard?: boolean;
+    /**
+     * Optional secret for bootstrapping the initial administrator account.
+     */
+    adminBootstrapSecret?: string;
 }
 declare class EasyAuthService {
     readonly options: EasyAuthModuleOptions;
@@ -56,6 +60,14 @@ declare class EasyAuthService {
      * Validates and consumes a single-use nonce.
      */
     consumeNonce(nonce: string, address?: string): boolean;
+    /**
+     * Updates user metadata.
+     */
+    updateUserMetadata(userId: string, patch: Record<string, any>): Promise<User>;
+    /**
+     * Alias for updateUserMetadata.
+     */
+    updateMetadata(userId: string, patch: Record<string, any>): Promise<User>;
 }
 
 interface EasyAuthModuleAsyncOptions {
@@ -150,6 +162,56 @@ declare class EasyAuthController {
     listIdentities(userId?: string, currentUserId?: string): Promise<{
         statusCode: HttpStatus;
         identities: Identity[];
+    }>;
+    /**
+     * Update current authenticated user's metadata (e.g. bind EVM address, profile fields).
+     * PATCH /api/auth/metadata
+     * POST /api/auth/metadata
+     */
+    updateMyMetadata(user: User, body: any): Promise<{
+        statusCode: HttpStatus;
+        user: User;
+        metadata: Record<string, any>;
+    }>;
+    /**
+     * Alias for updateMyMetadata using POST.
+     * POST /api/auth/metadata
+     */
+    updateMyMetadataPost(user: User, body: any): Promise<{
+        statusCode: HttpStatus;
+        user: User;
+        metadata: Record<string, any>;
+    }>;
+    /**
+     * Update target user's metadata by an administrator.
+     * PATCH /api/auth/admin/users/:userId/metadata
+     */
+    updateAdminUserMetadata(targetUserId: string, currentUser: User, body: any): Promise<{
+        statusCode: HttpStatus;
+        user: User;
+        metadata: Record<string, any>;
+    }>;
+    /**
+     * Alias for updateAdminUserMetadata using POST.
+     * POST /api/auth/admin/users/:userId/metadata
+     */
+    updateAdminUserMetadataPost(targetUserId: string, currentUser: User, body: any): Promise<{
+        statusCode: HttpStatus;
+        user: User;
+        metadata: Record<string, any>;
+    }>;
+    /**
+     * Bootstrap initial admin account using a configured server secret.
+     * POST /api/auth/admin/bootstrap
+     */
+    bootstrapAdmin(body: {
+        userId: string;
+        secret: string;
+    }): Promise<{
+        statusCode: HttpStatus;
+        success: boolean;
+        user: User;
+        metadata: Record<string, any>;
     }>;
 }
 
