@@ -165,7 +165,7 @@ describe("NestJS Integration (EasyAuthModule)", () => {
       ).rejects.toThrow();
     });
 
-    it("should allow user to update metadata (e.g. bind EVM address, custom attributes)", async () => {
+    it("should allow user to update metadata but strip protected privilege fields (anti-privilege escalation)", async () => {
       const loginRes = await authController.login({
         provider: "test-provider",
         credentials: { username: "meta_user" },
@@ -174,15 +174,25 @@ describe("NestJS Integration (EasyAuthModule)", () => {
       const updateRes = await authController.updateMyMetadata(loginRes.user, {
         wallet_address: "0x1234567890123456789012345678901234567890",
         bio: "Web3 Builder",
-        role: "admin",
-        isAdmin: true,
+        role: "admin", // MUST BE STRIPPED
+        isAdmin: true, // MUST BE STRIPPED
+        permissions: ["*"], // MUST BE STRIPPED
       });
 
       expect(updateRes.statusCode).toBe(200);
       expect(updateRes.metadata.wallet_address).toBe("0x1234567890123456789012345678901234567890");
       expect(updateRes.metadata.bio).toBe("Web3 Builder");
-      expect(updateRes.metadata.role).toBe("admin");
-      expect(updateRes.metadata.isAdmin).toBe(true);
+      expect(updateRes.metadata.role).toBeUndefined();
+      expect(updateRes.metadata.isAdmin).toBeUndefined();
+      expect(updateRes.metadata.permissions).toBeUndefined();
+
+      // However, direct server-side calls via authService.updateUserMetadata are unrestricted
+      const serverUpdated = await authService.updateUserMetadata(loginRes.user.id, {
+        role: "admin",
+        isAdmin: true,
+      });
+      expect(serverUpdated.metadata.role).toBe("admin");
+      expect(serverUpdated.metadata.isAdmin).toBe(true);
     });
   });
 

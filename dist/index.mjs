@@ -2080,6 +2080,14 @@ var CurrentUser = createParamDecorator(
 var Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 // src/nestjs/easy-auth.controller.ts
+var PROTECTED_METADATA_KEYS = [
+  "role",
+  "isAdmin",
+  "roles",
+  "permissions",
+  "banned",
+  "isBanned"
+];
 var EasyAuthController = class {
   constructor(authService) {
     this.authService = authService;
@@ -2256,9 +2264,17 @@ var EasyAuthController = class {
         HttpStatus.UNAUTHORIZED
       );
     }
-    const patch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
+    const rawPatch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
+    const sanitizedPatch = {};
+    if (rawPatch && typeof rawPatch === "object") {
+      for (const [key, value] of Object.entries(rawPatch)) {
+        if (!PROTECTED_METADATA_KEYS.includes(key)) {
+          sanitizedPatch[key] = value;
+        }
+      }
+    }
     try {
-      const updatedUser = await this.authService.updateUserMetadata(user.id, patch);
+      const updatedUser = await this.authService.updateUserMetadata(user.id, sanitizedPatch);
       return {
         statusCode: HttpStatus.OK,
         user: updatedUser,

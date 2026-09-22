@@ -18,6 +18,15 @@ import { EasyAuthGuard } from "./easy-auth.guard.js";
 import { Public, CurrentUser } from "./decorators.js";
 import type { User } from "../core/types.js";
 
+const PROTECTED_METADATA_KEYS = [
+  "role",
+  "isAdmin",
+  "roles",
+  "permissions",
+  "banned",
+  "isBanned",
+];
+
 @Controller("api/auth")
 @UseGuards(EasyAuthGuard)
 export class EasyAuthController {
@@ -269,10 +278,20 @@ export class EasyAuthController {
       );
     }
 
-    const patch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
+    const rawPatch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
+
+    // Security: Filter out protected privilege fields to prevent privilege escalation from userland API
+    const sanitizedPatch: Record<string, any> = {};
+    if (rawPatch && typeof rawPatch === "object") {
+      for (const [key, value] of Object.entries(rawPatch)) {
+        if (!PROTECTED_METADATA_KEYS.includes(key)) {
+          sanitizedPatch[key] = value;
+        }
+      }
+    }
 
     try {
-      const updatedUser = await this.authService.updateUserMetadata(user.id, patch);
+      const updatedUser = await this.authService.updateUserMetadata(user.id, sanitizedPatch);
       return {
         statusCode: HttpStatus.OK,
         user: updatedUser,
