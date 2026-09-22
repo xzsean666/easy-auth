@@ -604,25 +604,6 @@ declare class EasyAuthController {
         statusCode: HttpStatus;
         identities: Identity[];
     }>;
-    /**
-     * Update current authenticated user's metadata (e.g. bind EVM address, profile fields, custom attributes).
-     * PATCH /api/auth/metadata
-     * POST /api/auth/metadata
-     */
-    updateMyMetadata(user: User, body: any): Promise<{
-        statusCode: HttpStatus;
-        user: User;
-        metadata: Record<string, any>;
-    }>;
-    /**
-     * Alias for updateMyMetadata using POST.
-     * POST /api/auth/metadata
-     */
-    updateMyMetadataPost(user: User, body: any): Promise<{
-        statusCode: HttpStatus;
-        user: User;
-        metadata: Record<string, any>;
-    }>;
 }
 
 /**

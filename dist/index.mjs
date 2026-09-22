@@ -4,7 +4,7 @@ import { mkdirSync } from 'fs';
 import { createRequire } from 'module';
 import { createRemoteJWKSet, jwtVerify, SignJWT, errors } from 'jose';
 import { isAddress, verifyMessage } from 'viem';
-import { Injectable, Inject, Optional, createParamDecorator, Get, Query, Post, Body, Headers, Patch, Controller, UseGuards, Global, Module, SetMetadata, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Inject, Optional, createParamDecorator, Get, Query, Post, Body, Headers, Controller, UseGuards, Global, Module, SetMetadata, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
 import { Reflector, APP_GUARD } from '@nestjs/core';
 
 var __defProp = Object.defineProperty;
@@ -2080,14 +2080,6 @@ var CurrentUser = createParamDecorator(
 var Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
 // src/nestjs/easy-auth.controller.ts
-var PROTECTED_METADATA_KEYS = [
-  "role",
-  "isAdmin",
-  "roles",
-  "permissions",
-  "banned",
-  "isBanned"
-];
 var EasyAuthController = class {
   constructor(authService) {
     this.authService = authService;
@@ -2257,36 +2249,6 @@ var EasyAuthController = class {
       this.handleError(err);
     }
   }
-  async updateMyMetadata(user, body) {
-    if (!user) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to update metadata" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-    const rawPatch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
-    const sanitizedPatch = {};
-    if (rawPatch && typeof rawPatch === "object") {
-      for (const [key, value] of Object.entries(rawPatch)) {
-        if (!PROTECTED_METADATA_KEYS.includes(key)) {
-          sanitizedPatch[key] = value;
-        }
-      }
-    }
-    try {
-      const updatedUser = await this.authService.updateUserMetadata(user.id, sanitizedPatch);
-      return {
-        statusCode: HttpStatus.OK,
-        user: updatedUser,
-        metadata: updatedUser.metadata
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  async updateMyMetadataPost(user, body) {
-    return this.updateMyMetadata(user, body);
-  }
 };
 __decorateClass([
   Public(),
@@ -2318,16 +2280,6 @@ __decorateClass([
   __decorateParam(0, Query("userId")),
   __decorateParam(1, CurrentUser("id"))
 ], EasyAuthController.prototype, "listIdentities", 1);
-__decorateClass([
-  Patch("metadata"),
-  __decorateParam(0, CurrentUser()),
-  __decorateParam(1, Body())
-], EasyAuthController.prototype, "updateMyMetadata", 1);
-__decorateClass([
-  Post("metadata"),
-  __decorateParam(0, CurrentUser()),
-  __decorateParam(1, Body())
-], EasyAuthController.prototype, "updateMyMetadataPost", 1);
 EasyAuthController = __decorateClass([
   Controller("api/auth"),
   UseGuards(EasyAuthGuard),

@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Get,
-  Patch,
   Param,
   Body,
   Headers,
@@ -17,15 +16,6 @@ import { EasyAuthError } from "../core/errors.js";
 import { EasyAuthGuard } from "./easy-auth.guard.js";
 import { Public, CurrentUser } from "./decorators.js";
 import type { User } from "../core/types.js";
-
-const PROTECTED_METADATA_KEYS = [
-  "role",
-  "isAdmin",
-  "roles",
-  "permissions",
-  "banned",
-  "isBanned",
-];
 
 @Controller("api/auth")
 @UseGuards(EasyAuthGuard)
@@ -259,58 +249,5 @@ export class EasyAuthController {
     } catch (err) {
       this.handleError(err);
     }
-  }
-
-  /**
-   * Update current authenticated user's metadata (e.g. bind EVM address, profile fields, custom attributes).
-   * PATCH /api/auth/metadata
-   * POST /api/auth/metadata
-   */
-  @Patch("metadata")
-  async updateMyMetadata(
-    @CurrentUser() user: User,
-    @Body() body: any
-  ) {
-    if (!user) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to update metadata" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-
-    const rawPatch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
-
-    // Security: Filter out protected privilege fields to prevent privilege escalation from userland API
-    const sanitizedPatch: Record<string, any> = {};
-    if (rawPatch && typeof rawPatch === "object") {
-      for (const [key, value] of Object.entries(rawPatch)) {
-        if (!PROTECTED_METADATA_KEYS.includes(key)) {
-          sanitizedPatch[key] = value;
-        }
-      }
-    }
-
-    try {
-      const updatedUser = await this.authService.updateUserMetadata(user.id, sanitizedPatch);
-      return {
-        statusCode: HttpStatus.OK,
-        user: updatedUser,
-        metadata: updatedUser.metadata,
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-
-  /**
-   * Alias for updateMyMetadata using POST.
-   * POST /api/auth/metadata
-   */
-  @Post("metadata")
-  async updateMyMetadataPost(
-    @CurrentUser() user: User,
-    @Body() body: any
-  ) {
-    return this.updateMyMetadata(user, body);
   }
 }

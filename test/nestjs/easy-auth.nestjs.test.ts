@@ -165,34 +165,32 @@ describe("NestJS Integration (EasyAuthModule)", () => {
       ).rejects.toThrow();
     });
 
-    it("should allow user to update metadata but strip protected privilege fields (anti-privilege escalation)", async () => {
+    it("should allow server-side metadata updates via authService.updateUserMetadata without exposing public HTTP endpoints", async () => {
       const loginRes = await authController.login({
         provider: "test-provider",
         credentials: { username: "meta_user" },
       });
 
-      const updateRes = await authController.updateMyMetadata(loginRes.user, {
+      // Public HTTP controller does not expose arbitrary metadata update endpoint
+      expect((authController as any).updateMyMetadata).toBeUndefined();
+
+      // Server-side updates via authService.updateUserMetadata are fully supported
+      const serverUpdated = await authService.updateUserMetadata(loginRes.user.id, {
         wallet_address: "0x1234567890123456789012345678901234567890",
         bio: "Web3 Builder",
-        role: "admin", // MUST BE STRIPPED
-        isAdmin: true, // MUST BE STRIPPED
-        permissions: ["*"], // MUST BE STRIPPED
-      });
-
-      expect(updateRes.statusCode).toBe(200);
-      expect(updateRes.metadata.wallet_address).toBe("0x1234567890123456789012345678901234567890");
-      expect(updateRes.metadata.bio).toBe("Web3 Builder");
-      expect(updateRes.metadata.role).toBeUndefined();
-      expect(updateRes.metadata.isAdmin).toBeUndefined();
-      expect(updateRes.metadata.permissions).toBeUndefined();
-
-      // However, direct server-side calls via authService.updateUserMetadata are unrestricted
-      const serverUpdated = await authService.updateUserMetadata(loginRes.user.id, {
         role: "admin",
         isAdmin: true,
       });
+
+      expect(serverUpdated.metadata.wallet_address).toBe("0x1234567890123456789012345678901234567890");
+      expect(serverUpdated.metadata.bio).toBe("Web3 Builder");
       expect(serverUpdated.metadata.role).toBe("admin");
       expect(serverUpdated.metadata.isAdmin).toBe(true);
+
+      // Verify updated user can be retrieved via authService.getUser
+      const fetchedUser = await authService.getUser(loginRes.user.id);
+      expect(fetchedUser?.metadata.role).toBe("admin");
+      expect(fetchedUser?.metadata.wallet_address).toBe("0x1234567890123456789012345678901234567890");
     });
   });
 

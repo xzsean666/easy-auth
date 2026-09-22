@@ -2083,14 +2083,6 @@ var CurrentUser = common.createParamDecorator(
 var Public = () => common.SetMetadata(IS_PUBLIC_KEY, true);
 
 // src/nestjs/easy-auth.controller.ts
-var PROTECTED_METADATA_KEYS = [
-  "role",
-  "isAdmin",
-  "roles",
-  "permissions",
-  "banned",
-  "isBanned"
-];
 exports.EasyAuthController = class EasyAuthController {
   constructor(authService) {
     this.authService = authService;
@@ -2260,36 +2252,6 @@ exports.EasyAuthController = class EasyAuthController {
       this.handleError(err);
     }
   }
-  async updateMyMetadata(user, body) {
-    if (!user) {
-      throw new common.HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to update metadata" },
-        common.HttpStatus.UNAUTHORIZED
-      );
-    }
-    const rawPatch = body?.metadata && typeof body.metadata === "object" ? body.metadata : body;
-    const sanitizedPatch = {};
-    if (rawPatch && typeof rawPatch === "object") {
-      for (const [key, value] of Object.entries(rawPatch)) {
-        if (!PROTECTED_METADATA_KEYS.includes(key)) {
-          sanitizedPatch[key] = value;
-        }
-      }
-    }
-    try {
-      const updatedUser = await this.authService.updateUserMetadata(user.id, sanitizedPatch);
-      return {
-        statusCode: common.HttpStatus.OK,
-        user: updatedUser,
-        metadata: updatedUser.metadata
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  async updateMyMetadataPost(user, body) {
-    return this.updateMyMetadata(user, body);
-  }
 };
 __decorateClass([
   Public(),
@@ -2321,16 +2283,6 @@ __decorateClass([
   __decorateParam(0, common.Query("userId")),
   __decorateParam(1, CurrentUser("id"))
 ], exports.EasyAuthController.prototype, "listIdentities", 1);
-__decorateClass([
-  common.Patch("metadata"),
-  __decorateParam(0, CurrentUser()),
-  __decorateParam(1, common.Body())
-], exports.EasyAuthController.prototype, "updateMyMetadata", 1);
-__decorateClass([
-  common.Post("metadata"),
-  __decorateParam(0, CurrentUser()),
-  __decorateParam(1, common.Body())
-], exports.EasyAuthController.prototype, "updateMyMetadataPost", 1);
 exports.EasyAuthController = __decorateClass([
   common.Controller("api/auth"),
   common.UseGuards(exports.EasyAuthGuard),
