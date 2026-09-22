@@ -5,6 +5,20 @@
 
 ---
 
+## 0. 设计理念与运行环境规范 (Design Philosophy & Runtime)
+
+### 0.1 运行环境基线（Node.js >= 22.0.0 Only）
+- **放弃老旧 Node.js 版本兼容**：`easy-auth` **严格仅支持 Node.js >= 22.0.0**，不针对 Node.js 18 / 20 等老旧版本提供向后兼容、Polyfill 或降级分支。
+- **拥抱现代平台能力**：全面采用 Node.js 22+ 原生内置的 `node:sqlite`（零 C++ 编译、零原生依赖包，开箱即用）、原生 Web Crypto API 及全局 `fetch`，保持极速冷启动与极简依赖树。
+
+### 0.2 纯第三方 OAuth & 外部身份治理定位
+- **不内置本地账号密码**：`easy-auth` 的核心定位是**第三方 OAuth 2.0 / OIDC / Web3 去中心化身份的统一聚合与关联治理（Identity Linking SDK）**。本 SDK 故意不设密码表、不存密码哈希，不参与重型传统密码系统的复杂生命周期（如密码防爆破、密码找回、重置等）。
+- **自研账号体系的标准演进路径**：
+  - 如果业务后续需要自有的账号密码、手机号验证码登录系统，**行业标准与推荐架构是独立搭建一套专属的 OAuth 2.0 授权服务器（Authorization Server）作为自主 IdP**。
+  - 自研 OAuth 2.0 服务就绪后，只需通过 `easy-auth` 的 `OAuth2BaseProvider`，配置几个核心 URL 端点（Token 交换与 UserInfo 查询），即可**在 1 分钟内以标准 OAuth 协议对接入系统**，与 Google、LINE、Web3 EVM 钱包平级管理，打通至同一个统一 `User`。
+
+---
+
 ## 1. 快速接入一览
 
 ```typescript
@@ -208,8 +222,8 @@ const result = await auth.authenticate("sms-otp", { phone: "+8613800000000", cod
 
 ---
 
-### 4.3 接入方式 2：声明式通用 OAuth2 / OIDC 基类 (适合 GitHub、Discord、Apple、Slack 等)
-针对标准 OAuth2 授权码流程，Easy Auth 提供内置的 `OAuth2BaseProvider`，**只需填写 Endpoint 配置和字段映射，无需编写任何网络请求或 Token 交换代码**：
+### 4.3 接入方式 2：声明式通用 OAuth2 / OIDC 基类（适合 GitHub、Discord、Apple 以及自研 OAuth 2.0 授权服务器）
+针对标准 OAuth2 授权码流程（包含三方平台及**业务自研的独立 OAuth 授权服务器**），Easy Auth 提供内置的 `OAuth2BaseProvider`，**只需填写 Endpoint 配置和字段映射，无需编写任何底层网络请求或 Token 交换代码**：
 
 ```typescript
 import { OAuth2BaseProvider } from "easy-auth";

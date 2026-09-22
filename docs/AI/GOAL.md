@@ -65,3 +65,5 @@
 ### 非目标 (Non-Goals)
 - **非自建 UI 库**：Easy Auth 不提供前端弹窗 UI 组件，仅专注服务端 SDK 与标准协议契约。
 - **非数据库强绑定 ORM**：不强迫用户绑定 Prisma 或 TypeORM，通过清晰的 `StorageAdapter` 接口适配外部持久化。
+- **不向下兼容老旧 Node.js**：明确基线为 **Node.js >= 22.0.0**，不针对 Node 18/20 等老旧版本提供向后兼容、Polyfill 或降级兼容方案。
+- **不内置本地传统账号密码**：严格专注第三方 OAuth / OIDC / Web3 外部身份治理。不维护密码表、不存密码散列。若业务需要自有账号密码体系，应独立构建专属的 OAuth 2.0 授权服务器（Authorization Server），再通过 `OAuth2BaseProvider` 标准化挂载对接。

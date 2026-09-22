@@ -3,12 +3,26 @@
 > **Universal Multi-Provider Authentication & Identity Linking SDK for Node.js & TypeScript**  
 > *Any login → One User → One User ID*
 
+[![Node.js: >=22.0.0](https://img.shields.io/badge/Node.js-%3E%3D22.0.0-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Easy Auth** is a lightweight, zero-boilerplate authentication orchestration SDK designed for modern Node.js and TypeScript backends. It flattens disparate login methods (Web3 Wallets, Google, GitHub, LINE, X, SMS OTP, etc.) into a single unified `User` model, manages multi-identity account linking, and issues standard JWT tokens.
+**Easy Auth** is a lightweight, zero-boilerplate authentication orchestration SDK designed for modern Node.js and TypeScript backends. It flattens disparate login methods (Web3 Wallets, Google, GitHub, LINE, X, TOTP, etc.) into a single unified `User` model, manages multi-identity account linking, and issues standard JWT tokens.
 
 With Easy Auth, business servers don't need to write glue code or database schemas for every third-party login provider. **One SDK handles both authentication and middleware token verification.**
+
+---
+
+## 🎯 定位与设计原则 (Architecture & Design Philosophy)
+
+### 1. 现代化 Node.js 运行时（Node.js >= 22.0.0 Only）
+- **放弃向后兼容**：本 SDK **严格仅支持 Node.js >= 22.0.0**，彻底放弃对 Node.js 18、20 等老旧版本的向下兼容与 Polyfill 妥协。
+- **零外部编译依赖**：默认存储基于 Node.js 22+ 内置的原生 `node:sqlite` 模块，无需引入如 `better-sqlite3`、`node-gyp`、`gcc/python` 等繁琐的本地 C++ 编译工具链，开箱即用，秒级部署。
+
+### 2. 纯第三方 OAuth & 外部身份架构（Third-Party OAuth / External Only）
+- **不内置传统本地账号密码**：`easy-auth` 定位为**纯外部身份治理与多平台 OAuth / Web3 聚合 SDK**。库中不设密码存储、不负责密码哈希加密，避免业务应用承担密码泄露、找回、弱口令撞库等高风险职责。
+- **自研账号体系的最佳演进路径**：如果你的业务后续需要自主的账号密码、手机号验证码等用户登录体系，**标准的架构方案是独立开发一套独立的 OAuth 2.0 / OIDC 授权服务（Authorization Server）作为自主 IdP**。
+- **无缝对接自研 OAuth**：当你的独立 OAuth 登录服务完成后，可以通过 `easy-auth` 内置的 `OAuth2BaseProvider`，仅需配置几个接口 URL（Token 与 UserInfo 端点）即可**在 1 分钟内无缝接入**，将自研账号与 Google、Web3 等身份完全平等地绑定至同一个统一 User。
 
 ---
 
@@ -20,7 +34,7 @@ With Easy Auth, business servers don't need to write glue code or database schem
 - ⚡ **Streamlined Verification**: Verify incoming Bearer tokens in one line: `const { userId, metadata } = await auth.verify(token)`.
 - 🔌 **Extensible in 3 Ways**:
   1. **Functional (1 line)** for custom SMS, Telegram, or internal SSO.
-  2. **Declarative (`OAuth2BaseProvider`)** for standard OAuth2/OIDC providers (GitHub, Discord, Google, etc.).
+  2. **Declarative (`OAuth2BaseProvider`)** for standard OAuth2/OIDC providers (GitHub, Discord, Google, **自研 OAuth 服务**, etc.).
   3. **Class-based (`AuthProvider`)** for cryptographic signatures (Web3 EVM wallets) or custom SDKs.
 - 📦 **Dual Output (ESM & CJS)**: Works out of the box with `import` and `require`.
 - 💾 **Native Database Persistence**: Built-in SQLite (Node.js 22+ `node:sqlite` zero-dependency engine) and PostgreSQL support, with automatic table initialization (Auto-DDL).
@@ -195,27 +209,28 @@ auth.registerProvider("sms-otp", async (credentials: { phone: string; code: stri
 });
 ```
 
-### Approach 2: Declarative `OAuth2BaseProvider`
-No HTTP boilerplate needed. Provide endpoints and profile mapping:
+### Approach 2: Declarative `OAuth2BaseProvider`（对接第三方 OAuth 或自研 OAuth 登录系统）
+无需手写复杂的 HTTP 交换和验签代码。无论是接入三方 OAuth（GitHub、Discord 等），还是对接**未来独立搭建的自研 OAuth 2.0 / OIDC 登录服务器**，只需声明接口端点与画像映射：
 
 ```typescript
-const discordProvider = new OAuth2BaseProvider({
-  name: "discord",
-  clientId: process.env.DISCORD_CLIENT_ID!,
-  clientSecret: process.env.DISCORD_CLIENT_SECRET!,
-  tokenEndpoint: "https://discord.com/api/oauth2/token",
-  userInfoEndpoint: "https://discord.com/api/users/@me",
+// 示例：对接未来自研的独立 OAuth 2.0 登录认证系统 (My-Auth-Server)
+const myCustomOAuthProvider = new OAuth2BaseProvider({
+  name: "my-oauth", // 客户端请求时传入 loginType: "my-oauth"
+  clientId: process.env.MY_OAUTH_CLIENT_ID!,
+  clientSecret: process.env.MY_OAUTH_CLIENT_SECRET!,
+  tokenEndpoint: "https://auth.mycompany.com/oauth/token",
+  userInfoEndpoint: "https://auth.mycompany.com/oauth/userinfo",
   mapProfile: (rawUser) => ({
-    providerUserId: rawUser.id,
+    providerUserId: String(rawUser.id || rawUser.sub),
     profile: {
       username: rawUser.username,
-      avatar: rawUser.avatar,
       email: rawUser.email,
+      avatar: rawUser.avatar,
     },
   }),
 });
 
-auth.registerProvider(discordProvider);
+auth.registerProvider(myCustomOAuthProvider);
 ```
 
 ### Approach 3: Class-Based Provider
