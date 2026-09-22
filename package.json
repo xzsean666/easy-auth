@@ -25,7 +25,6 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "prepare": "tsup",
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
