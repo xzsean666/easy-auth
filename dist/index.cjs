@@ -868,21 +868,10 @@ var AuthEngine = class {
       throw new EasyAuthError("STORAGE_ERROR", "Failed to resolve or create user during authentication.");
     }
     const providerNames = isNewUser ? [providerKey] : Array.from(new Set((await this.storage.listIdentitiesByUserId(user.id)).map((i) => i.provider)));
-    const auditPatch = {
+    user = await this.storage.updateUserMetadata(user.id, {
       lastLoginType: providerKey,
       lastLoginAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    if (providerKey === "web3" || extracted.profile?.address) {
-      const verifiedAddress = (extracted.profile?.address || extracted.providerUserId).toLowerCase();
-      const currentPermissions = user.metadata?.permissions && typeof user.metadata.permissions === "object" && !Array.isArray(user.metadata.permissions) ? user.metadata.permissions : {};
-      auditPatch.address = verifiedAddress;
-      auditPatch.wallet_address = verifiedAddress;
-      auditPatch.permissions = {
-        ...currentPermissions,
-        address: verifiedAddress
-      };
-    }
-    user = await this.storage.updateUserMetadata(user.id, auditPatch);
+    });
     const token = await this.jwtService.sign(user, {
       identities: providerNames
     });
@@ -923,18 +912,10 @@ var AuthEngine = class {
       providerUserId: extracted.providerUserId,
       profile: extracted.profile
     });
-    const mergedMetadata = { ...user.metadata, ...extracted.profile || {} };
-    if (providerKey === "web3" || extracted.profile?.address) {
-      const verifiedAddress = (extracted.profile?.address || extracted.providerUserId).toLowerCase();
-      const currentPermissions = mergedMetadata.permissions && typeof mergedMetadata.permissions === "object" && !Array.isArray(mergedMetadata.permissions) ? mergedMetadata.permissions : {};
-      mergedMetadata.address = verifiedAddress;
-      mergedMetadata.wallet_address = verifiedAddress;
-      mergedMetadata.permissions = {
-        ...currentPermissions,
-        address: verifiedAddress
-      };
+    if (extracted.profile) {
+      const mergedMetadata = { ...extracted.profile, ...user.metadata };
+      await this.storage.updateUserMetadata(userId, mergedMetadata);
     }
-    await this.storage.updateUserMetadata(userId, mergedMetadata);
     return identity;
   }
   /**
@@ -2108,10 +2089,7 @@ var PROTECTED_METADATA_KEYS = [
   "roles",
   "permissions",
   "banned",
-  "isBanned",
-  "address",
-  "wallet_address",
-  "walletAddress"
+  "isBanned"
 ];
 exports.EasyAuthController = class EasyAuthController {
   constructor(authService) {

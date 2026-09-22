@@ -25,9 +25,6 @@ const PROTECTED_METADATA_KEYS = [
   "permissions",
   "banned",
   "isBanned",
-  "address",
-  "wallet_address",
-  "walletAddress",
 ];
 
 @Controller("api/auth")

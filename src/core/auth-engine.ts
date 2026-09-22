@@ -94,26 +94,11 @@ export class AuthEngine {
       ? [providerKey]
       : Array.from(new Set((await this.storage.listIdentitiesByUserId(user.id)).map((i) => i.provider)));
 
-    // Track lastLogin audit in user metadata and automatically record verified Web3 address in permissions
-    const auditPatch: Record<string, any> = {
+    // Track lastLogin audit in user metadata
+    user = await this.storage.updateUserMetadata(user.id, {
       lastLoginType: providerKey,
       lastLoginAt: new Date().toISOString(),
-    };
-
-    if (providerKey === "web3" || extracted.profile?.address) {
-      const verifiedAddress = (extracted.profile?.address || extracted.providerUserId).toLowerCase();
-      const currentPermissions = (user.metadata?.permissions && typeof user.metadata.permissions === "object" && !Array.isArray(user.metadata.permissions))
-        ? user.metadata.permissions
-        : {};
-      auditPatch.address = verifiedAddress;
-      auditPatch.wallet_address = verifiedAddress;
-      auditPatch.permissions = {
-        ...currentPermissions,
-        address: verifiedAddress,
-      };
-    }
-
-    user = await this.storage.updateUserMetadata(user.id, auditPatch);
+    });
 
     const token = await this.jwtService.sign(user, {
       identities: providerNames,
@@ -161,22 +146,11 @@ export class AuthEngine {
       profile: extracted.profile,
     });
 
-    // Merge profile into user metadata and sync verified address to permissions.address if Web3
-    const mergedMetadata: Record<string, any> = { ...user.metadata, ...(extracted.profile || {}) };
-    if (providerKey === "web3" || extracted.profile?.address) {
-      const verifiedAddress = (extracted.profile?.address || extracted.providerUserId).toLowerCase();
-      const currentPermissions = (mergedMetadata.permissions && typeof mergedMetadata.permissions === "object" && !Array.isArray(mergedMetadata.permissions))
-        ? mergedMetadata.permissions
-        : {};
-      mergedMetadata.address = verifiedAddress;
-      mergedMetadata.wallet_address = verifiedAddress;
-      mergedMetadata.permissions = {
-        ...currentPermissions,
-        address: verifiedAddress,
-      };
+    // Optionally merge profile into user metadata if not already set
+    if (extracted.profile) {
+      const mergedMetadata = { ...extracted.profile, ...user.metadata };
+      await this.storage.updateUserMetadata(userId, mergedMetadata);
     }
-
-    await this.storage.updateUserMetadata(userId, mergedMetadata);
 
     return identity;
   }

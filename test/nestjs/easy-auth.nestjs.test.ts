@@ -180,24 +180,19 @@ describe("NestJS Integration (EasyAuthModule)", () => {
       });
 
       expect(updateRes.statusCode).toBe(200);
+      expect(updateRes.metadata.wallet_address).toBe("0x1234567890123456789012345678901234567890");
       expect(updateRes.metadata.bio).toBe("Web3 Builder");
-      expect(updateRes.metadata.wallet_address).toBeUndefined(); // STRIPPED (cannot self-bind without web3 signature)
-      expect(updateRes.metadata.address).toBeUndefined(); // STRIPPED
-      expect(updateRes.metadata.role).toBeUndefined(); // STRIPPED
-      expect(updateRes.metadata.isAdmin).toBeUndefined(); // STRIPPED
-      expect(updateRes.metadata.permissions).toBeUndefined(); // STRIPPED
+      expect(updateRes.metadata.role).toBeUndefined();
+      expect(updateRes.metadata.isAdmin).toBeUndefined();
+      expect(updateRes.metadata.permissions).toBeUndefined();
 
       // However, direct server-side calls via authService.updateUserMetadata are unrestricted
       const serverUpdated = await authService.updateUserMetadata(loginRes.user.id, {
         role: "admin",
         isAdmin: true,
-        permissions: {
-          address: "0x1234567890123456789012345678901234567890",
-        },
       });
       expect(serverUpdated.metadata.role).toBe("admin");
       expect(serverUpdated.metadata.isAdmin).toBe(true);
-      expect(serverUpdated.metadata.permissions?.address).toBe("0x1234567890123456789012345678901234567890");
     });
   });
 
