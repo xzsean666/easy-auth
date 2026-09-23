@@ -1644,8 +1644,14 @@ exports.EasyAuthController = class EasyAuthController {
   startOAuthByPath(provider, redirect, req, res) {
     return this.executeOAuthRedirect(provider, redirect, req, res);
   }
-  startOAuth(provider, redirect, req, res) {
-    return this.executeOAuthRedirect(provider, redirect, req, res);
+  googleOAuth(redirect, req, res) {
+    return this.executeOAuthRedirect("google", redirect, req, res);
+  }
+  lineOAuth(redirect, req, res) {
+    return this.executeOAuthRedirect("line", redirect, req, res);
+  }
+  githubOAuth(redirect, req, res) {
+    return this.executeOAuthRedirect("github", redirect, req, res);
   }
   executeOAuthRedirect(provider, redirect, req, res) {
     const protocol = req?.headers?.["x-forwarded-proto"] || req?.protocol || "https";
@@ -1766,12 +1772,25 @@ __decorateClass([
 ], exports.EasyAuthController.prototype, "startOAuthByPath", 1);
 __decorateClass([
   Public(),
-  common.Get(":provider(google|line|github|discord)"),
-  __decorateParam(0, common.Param("provider")),
-  __decorateParam(1, common.Query("redirect")),
-  __decorateParam(2, common.Req()),
-  __decorateParam(3, common.Res())
-], exports.EasyAuthController.prototype, "startOAuth", 1);
+  common.Get("google"),
+  __decorateParam(0, common.Query("redirect")),
+  __decorateParam(1, common.Req()),
+  __decorateParam(2, common.Res())
+], exports.EasyAuthController.prototype, "googleOAuth", 1);
+__decorateClass([
+  Public(),
+  common.Get("line"),
+  __decorateParam(0, common.Query("redirect")),
+  __decorateParam(1, common.Req()),
+  __decorateParam(2, common.Res())
+], exports.EasyAuthController.prototype, "lineOAuth", 1);
+__decorateClass([
+  Public(),
+  common.Get("github"),
+  __decorateParam(0, common.Query("redirect")),
+  __decorateParam(1, common.Req()),
+  __decorateParam(2, common.Res())
+], exports.EasyAuthController.prototype, "githubOAuth", 1);
 __decorateClass([
   Public(),
   common.Get("callback/:provider"),

@@ -269,18 +269,45 @@ export class EasyAuthController {
   }
 
   /**
-   * OAuth redirection initiator (named alias for common providers).
-   * GET /api/auth/:provider(google|line|github|discord)
+   * OAuth redirection initiator for Google.
+   * GET /api/auth/google
    */
   @Public()
-  @Get(":provider(google|line|github|discord)")
-  startOAuth(
-    @Param("provider") provider: string,
+  @Get("google")
+  googleOAuth(
     @Query("redirect") redirect: string | undefined,
     @Req() req: any,
     @Res() res: any
   ) {
-    return this.executeOAuthRedirect(provider, redirect, req, res);
+    return this.executeOAuthRedirect("google", redirect, req, res);
+  }
+
+  /**
+   * OAuth redirection initiator for LINE.
+   * GET /api/auth/line
+   */
+  @Public()
+  @Get("line")
+  lineOAuth(
+    @Query("redirect") redirect: string | undefined,
+    @Req() req: any,
+    @Res() res: any
+  ) {
+    return this.executeOAuthRedirect("line", redirect, req, res);
+  }
+
+  /**
+   * OAuth redirection initiator for GitHub.
+   * GET /api/auth/github
+   */
+  @Public()
+  @Get("github")
+  githubOAuth(
+    @Query("redirect") redirect: string | undefined,
+    @Req() req: any,
+    @Res() res: any
+  ) {
+    return this.executeOAuthRedirect("github", redirect, req, res);
   }
 
   private executeOAuthRedirect(

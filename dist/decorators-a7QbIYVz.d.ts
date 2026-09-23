@@ -626,10 +626,20 @@ declare class EasyAuthController {
      */
     startOAuthByPath(provider: string, redirect: string | undefined, req: any, res: any): any;
     /**
-     * OAuth redirection initiator (named alias for common providers).
-     * GET /api/auth/:provider(google|line|github|discord)
+     * OAuth redirection initiator for Google.
+     * GET /api/auth/google
      */
-    startOAuth(provider: string, redirect: string | undefined, req: any, res: any): any;
+    googleOAuth(redirect: string | undefined, req: any, res: any): any;
+    /**
+     * OAuth redirection initiator for LINE.
+     * GET /api/auth/line
+     */
+    lineOAuth(redirect: string | undefined, req: any, res: any): any;
+    /**
+     * OAuth redirection initiator for GitHub.
+     * GET /api/auth/github
+     */
+    githubOAuth(redirect: string | undefined, req: any, res: any): any;
     private executeOAuthRedirect;
     /**
      * Universal OAuth redirection callback handler.

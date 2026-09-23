@@ -284,7 +284,7 @@ describe("NestJS Integration (EasyAuthModule)", () => {
         },
       };
 
-      authController.startOAuth("google", "https://frontend.com/dashboard", mockReq, mockRes);
+      authController.googleOAuth("https://frontend.com/dashboard", mockReq, mockRes);
 
       expect(redirectedUrl).toContain("https://accounts.google.com/o/oauth2/v2/auth?");
       expect(redirectedUrl).toContain("client_id=mock");
