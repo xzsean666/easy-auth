@@ -13,6 +13,8 @@ export interface OAuth2BaseProviderOptions<TProfile = any> {
   clientSecret: string;
   tokenEndpoint: string;
   userInfoEndpoint: string;
+  authorizationEndpoint?: string;
+  scope?: string;
   mapProfile: (
     rawUserInfo: any,
     tokenResponse: any
@@ -163,5 +165,24 @@ export class OAuth2BaseProvider<TProfile = any> implements AuthProvider<OAuth2Cr
       providerUserId: mapped.providerUserId.trim(),
       profile: mapped.profile,
     };
+  }
+
+  /**
+   * Generates standard OAuth2 authorization URL for browser redirection.
+   */
+  getAuthorizationUrl(options: { redirectUri: string; state?: string; scope?: string }): string {
+    if (!this.options.authorizationEndpoint) {
+      throw new EasyAuthError("CONFIG_ERROR", `OAuth2 provider "${this.name}" has no authorizationEndpoint configured.`);
+    }
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: this.options.clientId,
+      redirect_uri: options.redirectUri,
+      scope: options.scope || this.options.scope || "openid profile email",
+    });
+    if (options.state) {
+      params.append("state", options.state);
+    }
+    return `${this.options.authorizationEndpoint}?${params.toString()}`;
   }
 }

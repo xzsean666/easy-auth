@@ -4,7 +4,7 @@ import { mkdirSync } from 'fs';
 import { createRequire } from 'module';
 import { createRemoteJWKSet, jwtVerify, SignJWT, errors } from 'jose';
 import { isAddress, verifyMessage } from 'viem';
-import { Injectable, Inject, Optional, createParamDecorator, Get, Query, Post, Body, Headers, Controller, UseGuards, Global, Module, SetMetadata, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Inject, Optional, createParamDecorator, Get, Query, Post, Body, Headers, Param, Req, Res, Controller, UseGuards, Global, Module, SetMetadata, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
 import { Reflector, APP_GUARD } from '@nestjs/core';
 
 var __defProp = Object.defineProperty;
@@ -1313,6 +1313,19 @@ var EasyAuth = class {
   async updateMetadata(userId, patch) {
     return this.engine.updateMetadata(userId, patch);
   }
+  /**
+   * Obtains OAuth redirection authorization URL for supported providers.
+   */
+  getAuthorizationUrl(providerName, options) {
+    const provider = this.registry.get(providerName);
+    if (!provider) {
+      throw new EasyAuthError("INVALID_CREDENTIALS", `Authentication provider "${providerName}" is not registered.`);
+    }
+    if (typeof provider.getAuthorizationUrl === "function") {
+      return provider.getAuthorizationUrl(options);
+    }
+    throw new EasyAuthError("CONFIG_ERROR", `Provider "${providerName}" does not implement getAuthorizationUrl().`);
+  }
 };
 
 // src/providers/oauth2-base.ts
@@ -1419,6 +1432,24 @@ var OAuth2BaseProvider = class {
       providerUserId: mapped.providerUserId.trim(),
       profile: mapped.profile
     };
+  }
+  /**
+   * Generates standard OAuth2 authorization URL for browser redirection.
+   */
+  getAuthorizationUrl(options) {
+    if (!this.options.authorizationEndpoint) {
+      throw new EasyAuthError("CONFIG_ERROR", `OAuth2 provider "${this.name}" has no authorizationEndpoint configured.`);
+    }
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: this.options.clientId,
+      redirect_uri: options.redirectUri,
+      scope: options.scope || this.options.scope || "openid profile email"
+    });
+    if (options.state) {
+      params.append("state", options.state);
+    }
+    return `${this.options.authorizationEndpoint}?${params.toString()}`;
   }
 };
 var GoogleProvider = class _GoogleProvider {
@@ -1581,6 +1612,24 @@ var GoogleProvider = class _GoogleProvider {
       throw new EasyAuthError(code2, `Google OAuth code exchange failed: ${err.message}`, err);
     }
   }
+  /**
+   * Generates standard Google OAuth 2.0 authorization URL for browser redirection.
+   */
+  getAuthorizationUrl(options) {
+    const primaryClientId = Array.isArray(this.options.clientId) ? this.options.clientId[0] : this.options.clientId;
+    const params = new URLSearchParams({
+      client_id: primaryClientId,
+      redirect_uri: options.redirectUri,
+      response_type: "code",
+      scope: options.scope || "openid email profile",
+      access_type: "offline",
+      prompt: "select_account"
+    });
+    if (options.state) {
+      params.append("state", options.state);
+    }
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
 };
 
 // src/providers/line/index.ts
@@ -1713,6 +1762,21 @@ var LineProvider = class {
       const code = isNetwork ? "NETWORK_ERROR" : "INVALID_CREDENTIALS";
       throw new EasyAuthError(code, `LINE profile fetch failed: ${err.message}`, err);
     }
+  }
+  /**
+   * Generates standard LINE Login v2.1 authorization URL for browser redirection.
+   */
+  getAuthorizationUrl(options) {
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: this.options.channelId,
+      redirect_uri: options.redirectUri,
+      scope: options.scope || "profile openid email"
+    });
+    if (options.state) {
+      params.append("state", options.state);
+    }
+    return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
   }
 };
 var BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -2018,6 +2082,12 @@ var EasyAuthService = class {
   async updateMetadata(userId, patch) {
     return this.auth.updateUserMetadata(userId, patch);
   }
+  /**
+   * Obtains OAuth redirection authorization URL for supported providers.
+   */
+  getAuthorizationUrl(providerName, options) {
+    return this.auth.getAuthorizationUrl(providerName, options);
+  }
 };
 EasyAuthService = __decorateClass([
   Injectable(),
@@ -2249,6 +2319,90 @@ var EasyAuthController = class {
       this.handleError(err);
     }
   }
+  startOAuthByPath(provider, redirect, req, res) {
+    return this.executeOAuthRedirect(provider, redirect, req, res);
+  }
+  startOAuth(provider, redirect, req, res) {
+    return this.executeOAuthRedirect(provider, redirect, req, res);
+  }
+  executeOAuthRedirect(provider, redirect, req, res) {
+    const protocol = req?.headers?.["x-forwarded-proto"] || req?.protocol || "https";
+    const host = req?.headers?.["x-forwarded-host"] || req?.get?.("host") || req?.headers?.host || "localhost";
+    const defaultCallbackUri = `${protocol}://${host}/api/auth/callback/${provider}`;
+    const envCallback = process.env[`${provider.toUpperCase()}_REDIRECT_URI`] || process.env.AUTH_CALLBACK_URL;
+    const backendCallbackUri = envCallback || defaultCallbackUri;
+    const targetRedirect = redirect || process.env.FRONTEND_URL || process.env.DEFAULT_FRONTEND_URL || `${protocol}://${host}`;
+    const statePayload = Buffer.from(
+      JSON.stringify({ redirect: targetRedirect, provider })
+    ).toString("base64url");
+    try {
+      const authUrl = this.authService.getAuthorizationUrl(provider, {
+        redirectUri: backendCallbackUri,
+        state: statePayload
+      });
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(authUrl);
+      }
+      return { statusCode: HttpStatus.FOUND, url: authUrl };
+    } catch (err) {
+      this.handleError(err);
+    }
+  }
+  async handleOAuthCallback(provider, code, state, error, errorDescription, req, res) {
+    const protocol = req?.headers?.["x-forwarded-proto"] || req?.protocol || "https";
+    const host = req?.headers?.["x-forwarded-host"] || req?.get?.("host") || req?.headers?.host || "localhost";
+    let targetRedirect = process.env.FRONTEND_URL || process.env.DEFAULT_FRONTEND_URL || `${protocol}://${host}`;
+    if (state) {
+      try {
+        const decoded = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
+        if (decoded && typeof decoded.redirect === "string") {
+          targetRedirect = decoded.redirect;
+        }
+      } catch (err) {
+      }
+    }
+    const appendParam = (url, key, value) => {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}${key}=${encodeURIComponent(value)}`;
+    };
+    if (error || !code) {
+      const errorMsg = errorDescription || error || `Authentication with ${provider} was cancelled or failed`;
+      const errorUrl = appendParam(targetRedirect, "error", errorMsg);
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(errorUrl);
+      }
+      return { statusCode: HttpStatus.FOUND, url: errorUrl, error: errorMsg };
+    }
+    try {
+      const defaultCallbackUri = `${protocol}://${host}/api/auth/callback/${provider}`;
+      const envCallback = process.env[`${provider.toUpperCase()}_REDIRECT_URI`] || process.env.AUTH_CALLBACK_URL;
+      const backendCallbackUri = envCallback || defaultCallbackUri;
+      const result = await this.authService.authenticate(provider, {
+        code,
+        redirectUri: backendCallbackUri
+      });
+      let successUrl = appendParam(targetRedirect, "token", result.token);
+      successUrl = appendParam(successUrl, "userId", result.user.id);
+      if (result.isNewUser) {
+        successUrl = appendParam(successUrl, "isNewUser", "true");
+      }
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(successUrl);
+      }
+      return {
+        statusCode: HttpStatus.FOUND,
+        url: successUrl,
+        token: result.token,
+        userId: result.user.id
+      };
+    } catch (err) {
+      const errorUrl = appendParam(targetRedirect, "error", err.message || "Authentication exchange failed");
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(errorUrl);
+      }
+      return { statusCode: HttpStatus.FOUND, url: errorUrl, error: err.message };
+    }
+  }
 };
 __decorateClass([
   Public(),
@@ -2280,6 +2434,33 @@ __decorateClass([
   __decorateParam(0, Query("userId")),
   __decorateParam(1, CurrentUser("id"))
 ], EasyAuthController.prototype, "listIdentities", 1);
+__decorateClass([
+  Public(),
+  Get("oauth/:provider"),
+  __decorateParam(0, Param("provider")),
+  __decorateParam(1, Query("redirect")),
+  __decorateParam(2, Req()),
+  __decorateParam(3, Res())
+], EasyAuthController.prototype, "startOAuthByPath", 1);
+__decorateClass([
+  Public(),
+  Get(":provider(google|line|github|discord)"),
+  __decorateParam(0, Param("provider")),
+  __decorateParam(1, Query("redirect")),
+  __decorateParam(2, Req()),
+  __decorateParam(3, Res())
+], EasyAuthController.prototype, "startOAuth", 1);
+__decorateClass([
+  Public(),
+  Get("callback/:provider"),
+  __decorateParam(0, Param("provider")),
+  __decorateParam(1, Query("code")),
+  __decorateParam(2, Query("state")),
+  __decorateParam(3, Query("error")),
+  __decorateParam(4, Query("error_description")),
+  __decorateParam(5, Req()),
+  __decorateParam(6, Res())
+], EasyAuthController.prototype, "handleOAuthCallback", 1);
 EasyAuthController = __decorateClass([
   Controller("api/auth"),
   UseGuards(EasyAuthGuard),

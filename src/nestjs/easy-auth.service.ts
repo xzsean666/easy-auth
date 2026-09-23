@@ -100,4 +100,11 @@ export class EasyAuthService {
   async updateMetadata(userId: string, patch: Record<string, any>): Promise<User> {
     return this.auth.updateUserMetadata(userId, patch);
   }
+
+  /**
+   * Obtains OAuth redirection authorization URL for supported providers.
+   */
+  getAuthorizationUrl(providerName: string, options: { redirectUri: string; state?: string; scope?: string }): string {
+    return this.auth.getAuthorizationUrl(providerName, options);
+  }
 }

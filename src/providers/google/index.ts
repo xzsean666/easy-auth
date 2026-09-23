@@ -268,4 +268,23 @@ export class GoogleProvider implements AuthProvider<GoogleCredentials, GooglePro
       throw new EasyAuthError(code, `Google OAuth code exchange failed: ${err.message}`, err);
     }
   }
+
+  /**
+   * Generates standard Google OAuth 2.0 authorization URL for browser redirection.
+   */
+  getAuthorizationUrl(options: { redirectUri: string; state?: string; scope?: string }): string {
+    const primaryClientId = Array.isArray(this.options.clientId) ? this.options.clientId[0] : this.options.clientId;
+    const params = new URLSearchParams({
+      client_id: primaryClientId,
+      redirect_uri: options.redirectUri,
+      response_type: "code",
+      scope: options.scope || "openid email profile",
+      access_type: "offline",
+      prompt: "select_account",
+    });
+    if (options.state) {
+      params.append("state", options.state);
+    }
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  }
 }

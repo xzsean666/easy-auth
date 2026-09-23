@@ -1,5 +1,5 @@
-import { S as StorageAdapter, C as CreateUserData, U as User, a as CreateIdentityData, I as Identity, A as AuthProvider, E as ExtractedIdentity } from './decorators-mRzDiWLf.cjs';
-export { b as AuthEngine, c as AuthEngineDependencies, d as AuthResult, e as CurrentUser, D as DatabaseConfig, f as EasyAuth, g as EasyAuthController, h as EasyAuthGuard, i as EasyAuthJwtPayload, j as EasyAuthModule, k as EasyAuthModuleAsyncOptions, l as EasyAuthModuleOptions, m as EasyAuthOptions, n as EasyAuthService, F as FunctionalAuthProvider, J as JwtConfig, o as JwtService, P as ProviderRegistry, p as Public, q as SignJwtOptions, V as VerifyOptions, r as VerifyResult, W as Web3Credentials, s as Web3Profile, t as Web3Provider, u as Web3ProviderOptions } from './decorators-mRzDiWLf.cjs';
+import { S as StorageAdapter, C as CreateUserData, U as User, a as CreateIdentityData, I as Identity, A as AuthProvider, E as ExtractedIdentity } from './decorators-C__cEdxU.cjs';
+export { b as AuthEngine, c as AuthEngineDependencies, d as AuthResult, e as CurrentUser, D as DatabaseConfig, f as EasyAuth, g as EasyAuthController, h as EasyAuthGuard, i as EasyAuthJwtPayload, j as EasyAuthModule, k as EasyAuthModuleAsyncOptions, l as EasyAuthModuleOptions, m as EasyAuthOptions, n as EasyAuthService, F as FunctionalAuthProvider, J as JwtConfig, o as JwtService, P as ProviderRegistry, p as Public, q as SignJwtOptions, V as VerifyOptions, r as VerifyResult, W as Web3Credentials, s as Web3Profile, t as Web3Provider, u as Web3ProviderOptions } from './decorators-C__cEdxU.cjs';
 import { DatabaseSync } from 'node:sqlite';
 import '@nestjs/common';
 import '@nestjs/core';
@@ -155,6 +155,8 @@ interface OAuth2BaseProviderOptions<TProfile = any> {
     clientSecret: string;
     tokenEndpoint: string;
     userInfoEndpoint: string;
+    authorizationEndpoint?: string;
+    scope?: string;
     mapProfile: (rawUserInfo: any, tokenResponse: any) => {
         providerUserId: string;
         profile?: TProfile;
@@ -189,6 +191,14 @@ declare class OAuth2BaseProvider<TProfile = any> implements AuthProvider<OAuth2C
     private readonly contentType;
     constructor(options: OAuth2BaseProviderOptions<TProfile>);
     verifyAndExtract(credentials: OAuth2Credentials): Promise<ExtractedIdentity<TProfile>>;
+    /**
+     * Generates standard OAuth2 authorization URL for browser redirection.
+     */
+    getAuthorizationUrl(options: {
+        redirectUri: string;
+        state?: string;
+        scope?: string;
+    }): string;
 }
 
 interface GoogleCredentials {
@@ -260,6 +270,14 @@ declare class GoogleProvider implements AuthProvider<GoogleCredentials, GooglePr
     private verifyIdToken;
     private verifyIdTokenViaTokeninfo;
     private exchangeCode;
+    /**
+     * Generates standard Google OAuth 2.0 authorization URL for browser redirection.
+     */
+    getAuthorizationUrl(options: {
+        redirectUri: string;
+        state?: string;
+        scope?: string;
+    }): string;
 }
 
 interface LineCredentials {
@@ -319,6 +337,14 @@ declare class LineProvider implements AuthProvider<LineCredentials, LineProfile>
     private verifyIdToken;
     private exchangeCode;
     private fetchProfileByAccessToken;
+    /**
+     * Generates standard LINE Login v2.1 authorization URL for browser redirection.
+     */
+    getAuthorizationUrl(options: {
+        redirectUri: string;
+        state?: string;
+        scope?: string;
+    }): string;
 }
 
 interface TotpCredentials {

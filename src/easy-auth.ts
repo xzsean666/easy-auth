@@ -8,6 +8,7 @@ import type { JwtConfig } from "./jwt/types.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import type { AuthProvider, FunctionalAuthProvider } from "./providers/base.js";
 import { AuthEngine } from "./core/auth-engine.js";
+import { EasyAuthError } from "./core/errors.js";
 import type { User, Identity, AuthResult, VerifyResult, VerifyOptions } from "./core/types.js";
 import { Web3Provider, type Web3ProviderOptions } from "./providers/web3/index.js";
 
@@ -240,5 +241,19 @@ export class EasyAuth {
    */
   async updateMetadata(userId: string, patch: Record<string, any>): Promise<User> {
     return this.engine.updateMetadata(userId, patch);
+  }
+
+  /**
+   * Obtains OAuth redirection authorization URL for supported providers.
+   */
+  getAuthorizationUrl(providerName: string, options: { redirectUri: string; state?: string; scope?: string }): string {
+    const provider = this.registry.get(providerName);
+    if (!provider) {
+      throw new EasyAuthError("INVALID_CREDENTIALS", `Authentication provider "${providerName}" is not registered.`);
+    }
+    if (typeof (provider as any).getAuthorizationUrl === "function") {
+      return (provider as any).getAuthorizationUrl(options);
+    }
+    throw new EasyAuthError("CONFIG_ERROR", `Provider "${providerName}" does not implement getAuthorizationUrl().`);
   }
 }

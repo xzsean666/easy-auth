@@ -212,4 +212,20 @@ export class LineProvider implements AuthProvider<LineCredentials, LineProfile> 
       throw new EasyAuthError(code, `LINE profile fetch failed: ${err.message}`, err);
     }
   }
+
+  /**
+   * Generates standard LINE Login v2.1 authorization URL for browser redirection.
+   */
+  getAuthorizationUrl(options: { redirectUri: string; state?: string; scope?: string }): string {
+    const params = new URLSearchParams({
+      response_type: "code",
+      client_id: this.options.channelId,
+      redirect_uri: options.redirectUri,
+      scope: options.scope || "profile openid email",
+    });
+    if (options.state) {
+      params.append("state", options.state);
+    }
+    return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
+  }
 }

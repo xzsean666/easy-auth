@@ -446,6 +446,14 @@ declare class EasyAuth {
      * Alias for updateUserMetadata
      */
     updateMetadata(userId: string, patch: Record<string, any>): Promise<User>;
+    /**
+     * Obtains OAuth redirection authorization URL for supported providers.
+     */
+    getAuthorizationUrl(providerName: string, options: {
+        redirectUri: string;
+        state?: string;
+        scope?: string;
+    }): string;
 }
 
 interface EasyAuthModuleOptions extends EasyAuthOptions {
@@ -509,6 +517,14 @@ declare class EasyAuthService {
      * Alias for updateUserMetadata.
      */
     updateMetadata(userId: string, patch: Record<string, any>): Promise<User>;
+    /**
+     * Obtains OAuth redirection authorization URL for supported providers.
+     */
+    getAuthorizationUrl(providerName: string, options: {
+        redirectUri: string;
+        state?: string;
+        scope?: string;
+    }): string;
 }
 
 interface EasyAuthModuleAsyncOptions {
@@ -604,6 +620,22 @@ declare class EasyAuthController {
         statusCode: HttpStatus;
         identities: Identity[];
     }>;
+    /**
+     * OAuth redirection initiator.
+     * GET /api/auth/oauth/:provider
+     */
+    startOAuthByPath(provider: string, redirect: string | undefined, req: any, res: any): any;
+    /**
+     * OAuth redirection initiator (named alias for common providers).
+     * GET /api/auth/:provider(google|line|github|discord)
+     */
+    startOAuth(provider: string, redirect: string | undefined, req: any, res: any): any;
+    private executeOAuthRedirect;
+    /**
+     * Universal OAuth redirection callback handler.
+     * GET /api/auth/callback/:provider
+     */
+    handleOAuthCallback(provider: string, code: string | undefined, state: string | undefined, error: string | undefined, errorDescription: string | undefined, req: any, res: any): Promise<any>;
 }
 
 /**

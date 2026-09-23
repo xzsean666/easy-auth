@@ -254,4 +254,71 @@ describe("NestJS Integration (EasyAuthModule)", () => {
       expect(allowed).toBe(true);
     });
   });
+
+  describe("OAuth Redirection & Callback Endpoints", () => {
+    beforeEach(() => {
+      authService.auth.registerProvider({
+        name: "google",
+        verifyAndExtract: async (creds: { code?: string }) => {
+          if (!creds.code) throw new Error("Missing code");
+          return {
+            providerUserId: "google_12345",
+            profile: { email: "user@gmail.com" },
+          };
+        },
+        getAuthorizationUrl: (options: { redirectUri: string; state?: string }) => {
+          return `https://accounts.google.com/o/oauth2/v2/auth?client_id=mock&redirect_uri=${encodeURIComponent(options.redirectUri)}&state=${options.state || ""}`;
+        },
+      });
+    });
+
+    it("should initiate OAuth redirect and return 302 with auth URL", async () => {
+      const mockReq = {
+        headers: { host: "ems-dev-10011.002788.xyz", "x-forwarded-proto": "https" },
+        protocol: "https",
+      };
+      let redirectedUrl = "";
+      const mockRes = {
+        redirect: (url: string) => {
+          redirectedUrl = url;
+        },
+      };
+
+      authController.startOAuth("google", "https://frontend.com/dashboard", mockReq, mockRes);
+
+      expect(redirectedUrl).toContain("https://accounts.google.com/o/oauth2/v2/auth?");
+      expect(redirectedUrl).toContain("client_id=mock");
+      expect(redirectedUrl).toContain(encodeURIComponent("https://ems-dev-10011.002788.xyz/api/auth/callback/google"));
+    });
+
+    it("should handle OAuth callback, create user, sign JWT and redirect to frontend with token", async () => {
+      const statePayload = Buffer.from(
+        JSON.stringify({ redirect: "https://frontend.com/dashboard" })
+      ).toString("base64url");
+
+      const mockReq = {
+        headers: { host: "ems-dev-10011.002788.xyz", "x-forwarded-proto": "https" },
+        protocol: "https",
+      };
+      let redirectedUrl = "";
+      const mockRes = {
+        redirect: (url: string) => {
+          redirectedUrl = url;
+        },
+      };
+
+      await authController.handleOAuthCallback(
+        "google",
+        "mock_code_123",
+        statePayload,
+        undefined,
+        undefined,
+        mockReq,
+        mockRes
+      );
+
+      expect(redirectedUrl).toContain("https://frontend.com/dashboard?token=");
+      expect(redirectedUrl).toContain("userId=usr_");
+    });
+  });
 });

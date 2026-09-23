@@ -6,6 +6,8 @@ import {
   Body,
   Headers,
   Query,
+  Req,
+  Res,
   HttpException,
   HttpStatus,
   Inject,
@@ -248,6 +250,158 @@ export class EasyAuthController {
       };
     } catch (err) {
       this.handleError(err);
+    }
+  }
+
+  /**
+   * OAuth redirection initiator.
+   * GET /api/auth/oauth/:provider
+   */
+  @Public()
+  @Get("oauth/:provider")
+  startOAuthByPath(
+    @Param("provider") provider: string,
+    @Query("redirect") redirect: string | undefined,
+    @Req() req: any,
+    @Res() res: any
+  ) {
+    return this.executeOAuthRedirect(provider, redirect, req, res);
+  }
+
+  /**
+   * OAuth redirection initiator (named alias for common providers).
+   * GET /api/auth/:provider(google|line|github|discord)
+   */
+  @Public()
+  @Get(":provider(google|line|github|discord)")
+  startOAuth(
+    @Param("provider") provider: string,
+    @Query("redirect") redirect: string | undefined,
+    @Req() req: any,
+    @Res() res: any
+  ) {
+    return this.executeOAuthRedirect(provider, redirect, req, res);
+  }
+
+  private executeOAuthRedirect(
+    provider: string,
+    redirect: string | undefined,
+    req: any,
+    res: any
+  ) {
+    const protocol = req?.headers?.["x-forwarded-proto"] || req?.protocol || "https";
+    const host = req?.headers?.["x-forwarded-host"] || req?.get?.("host") || req?.headers?.host || "localhost";
+    const defaultCallbackUri = `${protocol}://${host}/api/auth/callback/${provider}`;
+    const envCallback =
+      process.env[`${provider.toUpperCase()}_REDIRECT_URI`] ||
+      process.env.AUTH_CALLBACK_URL;
+    const backendCallbackUri = envCallback || defaultCallbackUri;
+
+    const targetRedirect =
+      redirect ||
+      process.env.FRONTEND_URL ||
+      process.env.DEFAULT_FRONTEND_URL ||
+      `${protocol}://${host}`;
+
+    const statePayload = Buffer.from(
+      JSON.stringify({ redirect: targetRedirect, provider })
+    ).toString("base64url");
+
+    try {
+      const authUrl = this.authService.getAuthorizationUrl(provider, {
+        redirectUri: backendCallbackUri,
+        state: statePayload,
+      });
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(authUrl);
+      }
+      return { statusCode: HttpStatus.FOUND, url: authUrl };
+    } catch (err: any) {
+      this.handleError(err);
+    }
+  }
+
+  /**
+   * Universal OAuth redirection callback handler.
+   * GET /api/auth/callback/:provider
+   */
+  @Public()
+  @Get("callback/:provider")
+  async handleOAuthCallback(
+    @Param("provider") provider: string,
+    @Query("code") code: string | undefined,
+    @Query("state") state: string | undefined,
+    @Query("error") error: string | undefined,
+    @Query("error_description") errorDescription: string | undefined,
+    @Req() req: any,
+    @Res() res: any
+  ) {
+    const protocol = req?.headers?.["x-forwarded-proto"] || req?.protocol || "https";
+    const host = req?.headers?.["x-forwarded-host"] || req?.get?.("host") || req?.headers?.host || "localhost";
+
+    let targetRedirect =
+      process.env.FRONTEND_URL ||
+      process.env.DEFAULT_FRONTEND_URL ||
+      `${protocol}://${host}`;
+
+    if (state) {
+      try {
+        const decoded = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
+        if (decoded && typeof decoded.redirect === "string") {
+          targetRedirect = decoded.redirect;
+        }
+      } catch (err) {
+        // Fallback to default targetRedirect
+      }
+    }
+
+    const appendParam = (url: string, key: string, value: string) => {
+      const separator = url.includes("?") ? "&" : "?";
+      return `${url}${separator}${key}=${encodeURIComponent(value)}`;
+    };
+
+    if (error || !code) {
+      const errorMsg =
+        errorDescription || error || `Authentication with ${provider} was cancelled or failed`;
+      const errorUrl = appendParam(targetRedirect, "error", errorMsg);
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(errorUrl);
+      }
+      return { statusCode: HttpStatus.FOUND, url: errorUrl, error: errorMsg };
+    }
+
+    try {
+      const defaultCallbackUri = `${protocol}://${host}/api/auth/callback/${provider}`;
+      const envCallback =
+        process.env[`${provider.toUpperCase()}_REDIRECT_URI`] ||
+        process.env.AUTH_CALLBACK_URL;
+      const backendCallbackUri = envCallback || defaultCallbackUri;
+
+      const result = await this.authService.authenticate(provider, {
+        code,
+        redirectUri: backendCallbackUri,
+      });
+
+      let successUrl = appendParam(targetRedirect, "token", result.token);
+      successUrl = appendParam(successUrl, "userId", result.user.id);
+      if (result.isNewUser) {
+        successUrl = appendParam(successUrl, "isNewUser", "true");
+      }
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(successUrl);
+      }
+      return {
+        statusCode: HttpStatus.FOUND,
+        url: successUrl,
+        token: result.token,
+        userId: result.user.id,
+      };
+    } catch (err: any) {
+      const errorUrl = appendParam(targetRedirect, "error", err.message || "Authentication exchange failed");
+      if (res && typeof res.redirect === "function") {
+        return res.redirect(errorUrl);
+      }
+      return { statusCode: HttpStatus.FOUND, url: errorUrl, error: err.message };
     }
   }
 }
