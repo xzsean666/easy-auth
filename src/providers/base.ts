@@ -31,7 +31,13 @@ export interface AuthProvider<TCredentials = any, TProfile = any> {
    * Verifies the third-party credentials and extracts a normalized identity
    */
   verifyAndExtract(credentials: TCredentials): Promise<ExtractedIdentity<TProfile>>;
+
+  /**
+   * Optional method to generate authorization URL for OAuth2 redirection
+   */
+  getAuthorizationUrl?(options: { redirectUri: string; state?: string; scope?: string }): string;
 }
+
 
 /**
  * Functional provider type for one-line registration

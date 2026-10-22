@@ -7,13 +7,17 @@
 
 ## 1. 当前基本信息
 
-- **当前 Goal**: 为 Easy Auth (通用 Node.js 多源身份认证与多身份关联 SDK) 建立全套 AI 敏捷工程文档体系、核心实现与测试，使其他后端可以轻松接入 Easy Auth，无需关心繁琐的第三方登录细节。
-- **当前 Goal**: 为 Easy Auth (通用 Node.js 多源身份认证与多身份关联 SDK) 建立全套 AI 敏捷工程文档体系、核心实现与测试，使其他后端可以轻松接入 Easy Auth，无需关心繁琐的第三方登录细节。
-- **当前 Task**: `TASK-010: NestJS 零 Controller 自动化模块与 Guard 接入实现`
-- **当前状态**: `DONE` (全部 10 项任务均已顺利完成验收 🎉)
-- **更新时间**: 2026-09-22
+- **当前 Goal**: 实现 Milestone 6：跨平台多生态解耦（Edge/Universal 纯净核心）、Cloudflare D1 存储驱动（深度参考 cloudlflare-worker-kvdb 的 RYW 与 Batch 优化）以及框架无关易扩展的前端客户端 SDK。
+- **当前 Task**: `TASK-014: Cloudflare Worker + Hono 真实接入示例与全链路回归验证`
+- **当前状态**: `DONE` (Milestone 6 全部 4 项任务已 100% 达成验收 🎉)
+- **更新时间**: 2026-10-06
 
 ---
+
+
+
+
+
 
 ## 2. 本次已完成内容全景
 
@@ -58,8 +62,23 @@
     - 实现 `@CurrentUser()` 与 `@Public()` 装饰器，支持无缝参数解析与路由放行。
     - 编写完整 NestJS 单元与集成测试套件，并通过 `tsup` 导出独立的 `easy-auth/nestjs` 子模块。
     - 提供 `examples/nestjs-app.ts` 可直接参考的原型代码。
+11. **核心运行时解耦与子路径按需分包** (`TASK-011` ✅)：
+    - 主入口解除 NestJS、`node:fs` 静态硬捆绑，主产物纯净 Edge/Universal 兼容。
+    - 增加安全环境降级逻辑，在 Edge/Workers 沙箱未传 storage 时安全降级为内存存储。
+12. **Cloudflare D1 生产级存储适配器** (`TASK-012` ✅)：
+    - 实现 `D1StorageAdapter` 并导出为 `easy-auth/d1` 子路径。
+    - 引入 `D1SessionManager`，支持 `withSession(bookmark)` 机制，彻底解决分布式只读副本延迟导致的 RYW 脏读问题。
+    - 支持 `db.batch(...)` 单次网络 RPC 批量初始化表和索引。
+13. **框架无关的前端轻量扩展 Client SDK** (`TASK-013` ✅)：
+    - 实现 `EasyAuthClient` 并导出为 `easy-auth/client` 子路径。
+    - 内置 `LocalStorageAdapter`、`SessionStorageAdapter`、`MemoryTokenStorage`。
+    - 支持 `client.onAuthStateChange`、自动注入 Token 的 `client.fetch()` 及 401 自动清理。
+14. **Cloudflare Workers + Hono 真实接入示例与全链路回归** (`TASK-014` ✅)：
+    - 提供 `examples/cloudflare-worker-hono.ts` 原型，展示 D1 存储绑定、Web3/OAuth 登录与边缘中间件。
+    - 19 个测试套件、145 项测试全绿，tsup 双格式及全部 4 个子路径导出完整输出。
 
 ---
+
 
 ## 3. 修改与创建的文件列表
 

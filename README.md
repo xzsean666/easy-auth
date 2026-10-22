@@ -304,7 +304,68 @@ await auth.unlinkIdentity(currentUserId, "web3", "0x123...");
 
 ---
 
+## ☁️ Cloudflare Workers & D1 (`easy-auth/d1`)
+
+Easy Auth is 100% Edge-ready and provides a production-grade Cloudflare D1 storage driver:
+
+```typescript
+import { Hono } from "hono";
+import { EasyAuth, Web3Provider, GoogleProvider } from "easy-auth";
+import { D1StorageAdapter } from "easy-auth/d1";
+
+const app = new Hono<{ Bindings: { DB: D1Database; JWT_SECRET: string } }>();
+
+app.post("/api/auth/login", async (c) => {
+  const auth = new EasyAuth({
+    jwt: { secret: c.env.JWT_SECRET },
+    storage: new D1StorageAdapter({
+      db: c.env.DB,
+      autoInitTables: true, // Batch bootstrap tables via db.batch()
+    }),
+    providers: [new Web3Provider(), new GoogleProvider({ clientId: "..." })],
+  });
+
+  const { provider, credentials } = await c.req.json();
+  const result = await auth.authenticate(provider, credentials);
+  return c.json(result);
+});
+```
+
+* **Read-Your-Own-Writes (RYW)**: Automatically manages D1 session bookmarks (`storage.getBookmark()`) to prevent dirty reads across distributed replicas.
+
+---
+
+## 💻 Frontend Client SDK (`easy-auth/client`)
+
+Universal, framework-agnostic client for browsers, React, Vue, Svelte, and Next.js:
+
+```typescript
+import { EasyAuthClient, LocalStorageAdapter } from "easy-auth/client";
+
+export const client = new EasyAuthClient({
+  baseUrl: "https://api.myapp.com",
+  storage: new LocalStorageAdapter(), // or SessionStorageAdapter, MemoryTokenStorage
+});
+
+// 1. Reactive state changes (easy to wrap into React hooks or Vue composables)
+client.onAuthStateChange((user) => console.log("User:", user));
+
+// 2. Perform Login
+await client.login("google", { idToken: "..." });
+await client.login("web3", { address: "0x...", message: "...", signature: "..." });
+
+// 3. Higher-order fetch with automatic Bearer token injection & 401 logout
+const res = await client.fetch("/api/protected/profile");
+const profile = await res.json();
+
+// 4. Logout
+await client.logout();
+```
+
+---
+
 ## 🗄️ Storage Adapters
+
 
 Easy Auth decouples persistence through the `StorageAdapter` interface:
 

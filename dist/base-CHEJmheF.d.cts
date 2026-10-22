@@ -1,0 +1,25 @@
+import { C as CreateUserData, U as User, a as CreateIdentityData, I as Identity } from './types-BUHBKPKK.cjs';
+
+interface DeleteIdentityOptions {
+    /**
+     * If true, deletion succeeds only if the user has more than 1 linked identity.
+     * Prevents TOCTOU race conditions where concurrent requests orphan an account.
+     */
+    enforceMinimumCount?: boolean;
+}
+/**
+ * StorageAdapter interface contract
+ *
+ * Provides persistence decoupling for Easy Auth SDK.
+ */
+interface StorageAdapter {
+    createUser(data: CreateUserData): Promise<User>;
+    getUserById(id: string): Promise<User | null>;
+    updateUserMetadata(id: string, metadata: Record<string, any>): Promise<User>;
+    createIdentity(data: CreateIdentityData): Promise<Identity>;
+    getIdentity(provider: string, providerUserId: string): Promise<Identity | null>;
+    listIdentitiesByUserId(userId: string): Promise<Identity[]>;
+    deleteIdentity(userId: string, provider: string, providerUserId: string, options?: DeleteIdentityOptions): Promise<boolean>;
+}
+
+export type { DeleteIdentityOptions as D, StorageAdapter as S };

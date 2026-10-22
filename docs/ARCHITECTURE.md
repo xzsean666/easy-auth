@@ -366,3 +366,94 @@ src/
 2. **标识小写归一化 (Identifier Normalization)**：Provider 负责将外部标识清洗为全局唯一格式（例如钱包地址统一 `toLowerCase()`、邮箱统一去空格小写），底层内核负责全局独占性保障。
 3. **零配置依赖注入**：通过 `OAuth2BaseProvider` 基类，标准 OAuth2 服务（如 GitHub、Discord、Apple、飞书等）仅需提供几个 URL 字符串与字段映射，无需接入方引入庞大的第三方官方 SDK。
 
+---
+
+## 11. 多运行时与子路径按需分包体系 (Multi-Runtime & Subpath Decoupling)
+
+为了同时支持 Node.js、Cloudflare Workers、Next.js (Edge & Server)、浏览器等异构平台，Easy Auth 采用“**Universal Core + 按需子路径导出 (Subpath Exports)**”架构，彻底解除平台专有依赖的静态捆绑：
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                       easy-auth (Universal Core)                            │
+│  - 纯 Web 标准 (jose, viem, globalThis.fetch, TextEncoder)                  │
+│  - 核心领域模型: User, Identity, AuthEngine, JwtService, MemoryStorage       │
+│  - 兼容环境: Cloudflare Workers, Node.js, Next.js Edge, Bun, Browser        │
+└──────────────┬──────────────────┬────────────────────┬──────────────────────┘
+               │                  │                    │
+               ▼                  ▼                    ▼
+     ┌──────────────────┐ ┌───────────────┐ ┌────────────────────────┐
+     │ easy-auth/nestjs │ │  easy-auth/d1 │ │   easy-auth/client     │
+     │  NestJS 专属模块  │ │ Cloudflare D1 │ │ 框架无关前端客户端 SDK │
+     │  Guard/Decorators│ │ 存储驱动(RYW) │ │ Token管理与自动拦截器  │
+     └──────────────────┘ └───────────────┘ └────────────────────────┘
+```
+
+- **按需引入，零污染**：
+  - 边缘或无 NestJS 环境仅 `import { EasyAuth } from "easy-auth"`，绝不打包 `@nestjs/*` 或 Node.js 本地文件系统。
+  - NestJS 开发者 `import { EasyAuthModule } from "easy-auth/nestjs"`。
+  - Cloudflare Workers 开发者 `import { D1StorageAdapter } from "easy-auth/d1"`。
+  - 前端应用开发者 `import { EasyAuthClient } from "easy-auth/client"`。
+
+---
+
+## 12. Cloudflare D1 存储适配器与 Session RYW 架构
+
+深度参考 `/ssd0/git/cloudlflare-worker-kvdb` 的生产级实践，针对 Cloudflare D1 的分布式多副本特性进行优化：
+
+```text
+Cloudflare Worker Request
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     D1StorageAdapter                        │
+│                                                             │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │                 D1SessionManager                    │   │
+│   │  - 追踪并管理 active bookmark                       │   │
+│   │  - 自动调用 db.withSession(bookmark)                │   │
+│   │  - Read-Your-Own-Writes (RYW) 一致性保证            │   │
+│   └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │                  Auto-DDL Batch                     │   │
+│   │  - db.batch([createUsersTable, createIdentities...])│   │
+│   │  - 单次网络 RPC 完成 Schema 初始化                  │   │
+│   └─────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+         │
+         ▼
+Cloudflare D1 Database Engine
+```
+
+- **读写自身一致性 (RYW Consistency)**：写操作后自动提取并推进 bookmark，确保同一会话内的读请求路由到已同步副本，彻底避免主从复制延迟引起的“刚注册找不到用户”的脏读问题。
+- **批量原子执行 (Batching)**：利用 `db.batch()` 降低 Workers 到 D1 的 RPC 网络开销。
+
+---
+
+## 13. 框架无关、易扩展的前端客户端 SDK (`easy-auth/client`)
+
+前端 SDK 采用**内核纯净、插件式扩展、状态响应式**的设计：
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                       EasyAuthClient                        │
+│                                                             │
+│  - 状态管理: user, token, isAuthenticated                   │
+│  - 事件监听: onAuthStateChange((user) => ...)               │
+│  - 业务方法: login(), link(), unlink(), logout(), getMe()   │
+│  - 自动拦截: client.fetch() (自动附加 Bearer & 处理 401)    │
+│                                                             │
+│   ┌─────────────────────────────────────────────────────┐   │
+│   │             TokenStorageAdapter 接口                │   │
+│   │  - LocalStorageAdapter (默认浏览器持久化)           │   │
+│   │  - SessionStorageAdapter (单标签会话)               │   │
+│   │  - MemoryTokenStorage (无刷新保留/Node/单测)        │   │
+│   └─────────────────────────────────────────────────────┘   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+            ┌──────────────────┴──────────────────┐
+            ▼                                     ▼
+   React / Next.js Client                 Vue / Svelte / Vanilla
+   (轻量 useEasyAuth hook 包装)           (轻量响应式组合 API 包装)
+```
+

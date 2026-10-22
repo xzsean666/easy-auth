@@ -434,3 +434,121 @@ export class UserController {
 }
 ```
 
+---
+
+## 9. Cloudflare Workers 与 D1 存储接入规范 (`easy-auth/d1`)
+
+在 Cloudflare Workers 环境下，配合 Hono 或原生 Worker：
+
+### 9.1 安装与环境要求
+- 在 `wrangler.toml` 中配置 `compatibility_flags = ["nodejs_compat"]`，并绑定 D1 数据库：
+  ```toml
+  [[d1_databases]]
+  binding = "DB"
+  database_name = "easy-auth-db"
+  database_id = "xxxx-xxxx-xxxx"
+  ```
+
+### 9.2 在 Worker / Hono 中使用
+```typescript
+import { Hono } from "hono";
+import { EasyAuth, Web3Provider, GoogleProvider } from "easy-auth";
+import { D1StorageAdapter } from "easy-auth/d1";
+
+type Bindings = {
+  DB: D1Database;
+  JWT_SECRET: string;
+  GOOGLE_CLIENT_ID: string;
+};
+
+const app = new Hono<{ Bindings: Bindings }>();
+
+app.post("/api/auth/login", async (c) => {
+  const auth = new EasyAuth({
+    jwt: { secret: c.env.JWT_SECRET },
+    storage: new D1StorageAdapter({
+      db: c.env.DB,
+      autoInitTables: true, // 首次自动通过 db.batch(...) 建表与索引
+    }),
+    providers: [
+      new Web3Provider(),
+      new GoogleProvider({ clientId: c.env.GOOGLE_CLIENT_ID }),
+    ],
+  });
+
+  const { provider, credentials } = await c.req.json();
+  const result = await auth.authenticate(provider, credentials);
+  return c.json(result);
+});
+
+// 边缘网关中间件统一鉴权
+app.use("/api/*", async (c, next) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) return c.text("Unauthorized", 401);
+
+  const auth = new EasyAuth({
+    jwt: { secret: c.env.JWT_SECRET },
+    storage: new D1StorageAdapter({ db: c.env.DB }),
+  });
+
+  const { userId, user } = await auth.verify(authHeader.slice(7));
+  c.set("userId", userId);
+  c.set("user", user);
+  await next();
+});
+```
+
+### 9.3 Read-Your-Own-Writes (RYW) 一致性支持
+```typescript
+const storage = new D1StorageAdapter({
+  db: env.DB,
+  bookmark: requestBookmark, // 支持传入上一个 session bookmark
+});
+
+// 写操作后获取最新 bookmark 并回传给客户端 Header:
+const updatedBookmark = storage.getBookmark();
+```
+
+---
+
+## 10. 前端客户端 SDK 接入规范 (`easy-auth/client`)
+
+面向浏览器、单页应用 (SPA) 及各种前端框架（React, Vue, Svelte）的极简、强类型客户端 SDK：
+
+```typescript
+import { EasyAuthClient, LocalStorageAdapter } from "easy-auth/client";
+
+// 1. 初始化客户端
+export const client = new EasyAuthClient({
+  baseUrl: "https://api.example.com", // Auth 服务端基础地址
+  routePrefix: "/api/auth",          // 默认为 /api/auth
+  storage: new LocalStorageAdapter(),// 默认保存在 localStorage 中
+});
+
+// 2. 监听认证状态变化 (极简响应式对接 React/Vue)
+client.onAuthStateChange((user) => {
+  console.log("Current user updated:", user);
+});
+
+// 3. 执行登录
+const { user, token } = await client.login("google", { idToken: "..." });
+
+// 4. Web3 钱包登录
+const { user } = await client.login("web3", {
+  address: "0x123...",
+  message: "Sign in with Ethereum...",
+  signature: "0xabc...",
+});
+
+// 5. 多身份绑定与解绑
+await client.link("web3", { address: "0x456...", ... });
+await client.unlink("google", "1029384756");
+
+// 6. 统一高阶请求拦截 (自动携带 Token，401 自动触发登出)
+const res = await client.fetch("/api/user/orders");
+const orders = await res.json();
+
+// 7. 退出登录
+client.logout();
+```
+

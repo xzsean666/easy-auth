@@ -1,13 +1,26 @@
 import { randomUUID } from "node:crypto";
-import { dirname } from "node:path";
-import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import type { DatabaseSync } from "node:sqlite";
 import type { StorageAdapter } from "./base.js";
 import type { User, Identity, CreateUserData, CreateIdentityData } from "../core/types.js";
 import { EasyAuthError } from "../core/errors.js";
 
+function ensureDirectoryExists(filePath: string): void {
+  try {
+    const req = typeof require !== "undefined" ? require : createRequire(import.meta.url);
+    const pathMod = req("node:path");
+    const fsMod = req("node:fs");
+    const dir = pathMod.dirname(filePath);
+    if (dir && dir !== "." && typeof fsMod.mkdirSync === "function") {
+      fsMod.mkdirSync(dir, { recursive: true });
+    }
+  } catch {
+    // Non-filesystem environments or permission errors
+  }
+}
+
 function getDatabaseSyncClass(): typeof DatabaseSync {
+
   try {
     const req = typeof require !== "undefined" ? require : createRequire(import.meta.url);
     const mod = req("node:sqlite");
@@ -66,10 +79,7 @@ export class SqliteStorageAdapter implements StorageAdapter {
     } else {
       const location = options?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
       if (location !== ":memory:" && !location.startsWith("file::memory:")) {
-        const dir = dirname(location);
-        if (dir && dir !== ".") {
-          mkdirSync(dir, { recursive: true });
-        }
+        ensureDirectoryExists(location);
       }
       const DB = getDatabaseSyncClass();
       this.db = new DB(location);

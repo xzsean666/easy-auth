@@ -43,17 +43,28 @@
 - [x] 身份解绑（Identity Unlinking）安全防御：禁止解绑最后一个有效身份（Anti-Lockout）
 - [x] 针对核心领域逻辑的 100% 覆盖率单元测试
 
-### Milestone 4: 常用 Provider 适配器实现与 SDK 门面封装 (已完成 ✅)
-- [x] Provider 抽象契约 `AuthProvider` 与动态注册中心 `ProviderRegistry`
-- [x] Web3 EVM 钱包签名认证 Provider（支持 EIP-191 personal_sign 与 EIP-4361 SIWE 消息校验）
-- [x] OAuth 2.0 / OIDC 基础抽象与声明式通用 `OAuth2BaseProvider` 实现
-- [x] 极简第三方 Auth 扩展流水线（支持函数式 1 行注册与通用模板）
-- [x] SDK 主门面 `EasyAuth` 封装与统一请求鉴权 `auth.verify(token)` 直出一级 userId 与 metadata
-- [x] 提供真实后端集成示例（Express / Fastify 接入示例）
-- [x] 全链路端到端集成测试与生产级 README 文档
+### Milestone 5: 持久化数据库引擎与生态集成 (已完成 ✅)
+- [x] 基于 Node.js 22+ 原生 `node:sqlite` 的持久化存储适配器与自动建表
+- [x] PostgreSQL 存储适配器与自动建表
+- [x] NestJS 零 Controller 自动化模块与 Guard 接入
 
-
----
+### Milestone 6: 跨平台多生态解耦、Cloudflare D1 驱动与轻量 Client SDK (进行中 🚀)
+- [ ] **核心运行时解耦与按需子路径分包**：
+  - 解除主入口对 `@nestjs/*`、`node:fs`、`node:sqlite` 的静态硬捆绑。
+  - 主入口 `easy-auth` 保持 100% Edge/Universal 纯净，兼容 Node.js、Cloudflare Workers、Next.js Edge、Bun。
+  - 子路径按需加载：`easy-auth/nestjs`（NestJS）、`easy-auth/d1`（Cloudflare D1）、`easy-auth/client`（前端 Client）。
+- [ ] **Cloudflare D1 生产级存储适配器 (深度参考 `cloudlflare-worker-kvdb`)**：
+  - 基于 Cloudflare 原生 `D1Database` 实例实现 `D1StorageAdapter`。
+  - 支持 `D1SessionManager` / `bookmark` (Read-Your-Own-Writes 一致性保证)，解决分布式只读副本脏读问题。
+  - 高性能 Auto-DDL：基于 `db.batch(...)` 一次网络 RPC 完成表与索引建立。
+- [ ] **易扩展的现代化前端 Client SDK (`easy-auth/client`)**：
+  - 框架无关的 Vanilla JS / TS 前端核心客户端。
+  - 内置可插拔的 `TokenStorageAdapter`（支持 `localStorage` / `sessionStorage` / Cookie / 自定义）。
+  - 内置带 Token 自动注入与 401 拦截处理的高阶 `auth.fetch()`。
+  - 提供轻量适配机制，为后续 React Hooks (`useEasyAuth`)、Vue 等上层生态提供易扩展底座。
+- [ ] **Cloudflare Workers / Hono 端到端真实运行示例与回归测试**：
+  - 提供 `examples/cloudflare-worker-hono.ts` 原型。
+  - 编写全面的 D1 适配器与解耦单测，确保 100% 覆盖。
 
 ## 3. 验收基准与非目标
 

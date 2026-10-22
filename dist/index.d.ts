@@ -1,13 +1,14 @@
-import { S as StorageAdapter, C as CreateUserData, U as User, a as CreateIdentityData, I as Identity, A as AuthProvider, E as ExtractedIdentity } from './decorators-a7QbIYVz.js';
-export { b as AuthEngine, c as AuthEngineDependencies, d as AuthResult, e as CurrentUser, D as DatabaseConfig, f as EasyAuth, g as EasyAuthController, h as EasyAuthGuard, i as EasyAuthJwtPayload, j as EasyAuthModule, k as EasyAuthModuleAsyncOptions, l as EasyAuthModuleOptions, m as EasyAuthOptions, n as EasyAuthService, F as FunctionalAuthProvider, J as JwtConfig, o as JwtService, P as ProviderRegistry, p as Public, q as SignJwtOptions, V as VerifyOptions, r as VerifyResult, W as Web3Credentials, s as Web3Profile, t as Web3Provider, u as Web3ProviderOptions } from './decorators-a7QbIYVz.js';
+import { A as AuthProvider, E as ExtractedIdentity } from './easy-auth-BQVGVWRb.js';
+export { a as AuthEngine, b as AuthEngineDependencies, D as DatabaseConfig, c as EasyAuth, d as EasyAuthOptions, F as FunctionalAuthProvider, J as JwtConfig, e as JwtService, P as ProviderRegistry, S as SignJwtOptions, W as Web3Credentials, f as Web3Profile, g as Web3Provider, h as Web3ProviderOptions } from './easy-auth-BQVGVWRb.js';
+import { C as CreateUserData, U as User, a as CreateIdentityData, I as Identity } from './types-BUHBKPKK.js';
+export { A as AuthResult, E as EasyAuthJwtPayload, V as VerifyOptions, b as VerifyResult } from './types-BUHBKPKK.js';
+import { S as StorageAdapter } from './base-DKSmaKSh.js';
 import { DatabaseSync } from 'node:sqlite';
-import '@nestjs/common';
-import '@nestjs/core';
 
 /**
  * Easy Auth Error Code definitions
  */
-type ErrorCode = "PROVIDER_NOT_FOUND" | "INVALID_CREDENTIALS" | "TOKEN_INVALID" | "TOKEN_EXPIRED" | "USER_NOT_FOUND" | "IDENTITY_ALREADY_LINKED" | "CANNOT_UNLINK_LAST_IDENTITY" | "STORAGE_ERROR" | "CONFIG_ERROR" | "RATE_LIMIT_EXCEEDED" | "NETWORK_ERROR";
+type ErrorCode = "PROVIDER_NOT_FOUND" | "INVALID_CREDENTIALS" | "TOKEN_INVALID" | "TOKEN_EXPIRED" | "UNAUTHORIZED" | "USER_NOT_FOUND" | "IDENTITY_ALREADY_LINKED" | "CANNOT_UNLINK_LAST_IDENTITY" | "STORAGE_ERROR" | "CONFIG_ERROR" | "RATE_LIMIT_EXCEEDED" | "NETWORK_ERROR";
 /**
  * Standard error class for Easy Auth SDK
  */

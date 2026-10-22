@@ -73,11 +73,19 @@ export class EasyAuth {
       });
     } else if (options.database?.type === "memory") {
       this.storage = new MemoryStorageAdapter();
-    } else {
-      // Default to persistent SQLite on disk, ensuring user data is never lost across server restarts
-      const dbPath = options.database?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
+    } else if (options.database?.type === "sqlite") {
+      const dbPath = options.database.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
       this.storage = new SqliteStorageAdapter({ path: dbPath });
+    } else {
+      // Default to persistent SQLite on Node.js 22+, or safely fallback to MemoryStorage on Edge/Workers
+      try {
+        const dbPath = options.database?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
+        this.storage = new SqliteStorageAdapter({ path: dbPath });
+      } catch {
+        this.storage = new MemoryStorageAdapter();
+      }
     }
+
 
     this.jwt = new JwtService(options.jwt);
     this.registry = new ProviderRegistry();

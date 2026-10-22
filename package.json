@@ -16,12 +16,22 @@
       "types": "./dist/nestjs/index.d.ts",
       "import": "./dist/nestjs/index.mjs",
       "require": "./dist/nestjs/index.cjs"
+    },
+    "./d1": {
+      "types": "./dist/d1/index.d.ts",
+      "import": "./dist/d1/index.mjs",
+      "require": "./dist/d1/index.cjs"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.mjs",
+      "require": "./dist/client/index.cjs"
     }
   },
   "files": [
-    "dist",
-    "nestjs"
+    "dist"
   ],
+
   "engines": {
     "node": ">=22.0.0"
   },

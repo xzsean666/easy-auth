@@ -1,8 +1,6 @@
 import { Injectable, Inject, Optional, createParamDecorator, Get, Query, Post, Body, Headers, Param, Req, Res, Controller, UseGuards, Global, Module, SetMetadata, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
 import { Reflector, APP_GUARD } from '@nestjs/core';
 import { randomUUID } from 'crypto';
-import { dirname } from 'path';
-import { mkdirSync } from 'fs';
 import { createRequire } from 'module';
 import { SignJWT, jwtVerify, errors } from 'jose';
 import { isAddress, verifyMessage } from 'viem';
@@ -36,6 +34,7 @@ var ERROR_STATUS_MAP = {
   INVALID_CREDENTIALS: 401,
   TOKEN_INVALID: 401,
   TOKEN_EXPIRED: 401,
+  UNAUTHORIZED: 401,
   USER_NOT_FOUND: 404,
   IDENTITY_ALREADY_LINKED: 409,
   CANNOT_UNLINK_LAST_IDENTITY: 400,
@@ -198,6 +197,18 @@ var MemoryStorageAdapter = class {
     this.userIdentities.clear();
   }
 };
+function ensureDirectoryExists(filePath) {
+  try {
+    const req = typeof __require !== "undefined" ? __require : createRequire(import.meta.url);
+    const pathMod = req("node:path");
+    const fsMod = req("node:fs");
+    const dir = pathMod.dirname(filePath);
+    if (dir && dir !== "." && typeof fsMod.mkdirSync === "function") {
+      fsMod.mkdirSync(dir, { recursive: true });
+    }
+  } catch {
+  }
+}
 function getDatabaseSyncClass() {
   try {
     const req = typeof __require !== "undefined" ? __require : createRequire(import.meta.url);
@@ -220,10 +231,7 @@ var SqliteStorageAdapter = class {
     } else {
       const location = options?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
       if (location !== ":memory:" && !location.startsWith("file::memory:")) {
-        const dir = dirname(location);
-        if (dir && dir !== ".") {
-          mkdirSync(dir, { recursive: true });
-        }
+        ensureDirectoryExists(location);
       }
       const DB = getDatabaseSyncClass();
       this.db = new DB(location);
@@ -1182,9 +1190,16 @@ var EasyAuth = class {
       });
     } else if (options.database?.type === "memory") {
       this.storage = new MemoryStorageAdapter();
-    } else {
-      const dbPath = options.database?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
+    } else if (options.database?.type === "sqlite") {
+      const dbPath = options.database.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
       this.storage = new SqliteStorageAdapter({ path: dbPath });
+    } else {
+      try {
+        const dbPath = options.database?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
+        this.storage = new SqliteStorageAdapter({ path: dbPath });
+      } catch {
+        this.storage = new MemoryStorageAdapter();
+      }
     }
     this.jwt = new JwtService(options.jwt);
     this.registry = new ProviderRegistry();

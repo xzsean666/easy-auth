@@ -19,6 +19,13 @@
 | [TASK-008](file:///ssd0/git/easy-auth/docs/AI/tasks/TASK-008-GOOGLE-LINE-AND-TOTP-PROVIDERS.md) | Google、LINE 与 Google OTP (TOTP 6位数字验证码) Provider 实现 | 60m | TASK-007 | **DONE** ✅ | `src/providers/google/`, `src/providers/line/`, `src/providers/totp/` |
 | [TASK-009](file:///ssd0/git/easy-auth/docs/AI/tasks/TASK-009-DATABASE-STORAGE-ADAPTERS.md) | SQLite 与 PostgreSQL 持久化存储适配器实现 | 60m | TASK-003, TASK-007 | **DONE** ✅ | `src/storage/sqlite.ts`, `src/storage/postgres.ts` |
 | [TASK-010](file:///ssd0/git/easy-auth/docs/AI/tasks/TASK-010-NESTJS-INTEGRATION.md) | NestJS 零 Controller 自动化模块与 Guard 接入实现 | 60m | TASK-009 | **DONE** ✅ | `src/nestjs/` |
+| [TASK-011](file:///ssd0/git/easy-auth/docs/AI/tasks/TASK-011-MULTI-PLATFORM-SUBPATH-DECOUPLING.md) | 核心运行时解耦与子路径按需分包体系 (解除 NestJS 与 Node fs 顶层硬捆绑) | 60m | TASK-007, TASK-010 | **DONE** ✅ | `package.json`, `tsup.config.ts`, `src/index.ts`, `src/easy-auth.ts` |
+| [TASK-012](file:///ssd0/git/easy-auth/docs/AI/tasks/TASK-012-CLOUDFLARE-D1-STORAGE-ADAPTER.md) | Cloudflare D1 存储适配器与 RYW Session 优化 (参考 kvdb) | 60m | TASK-011 | **DONE** ✅ | `src/d1/` |
+
+| [TASK-013](file:///ssd0/git/easy-auth/docs/AI/tasks/TASK-013-CLIENT-SDK.md) | 框架无关的前端轻量扩展 Client SDK (easy-auth/client) | 60m | TASK-011 | **DONE** ✅ | `src/client/` |
+| [TASK-014](file:///ssd0/git/easy-auth/docs/AI/tasks/TASK-014-CLOUDFLARE-HONO-EXAMPLE-AND-TESTS.md) | Cloudflare Worker + Hono 真实接入示例与全链路回归验证 | 45m | TASK-011, TASK-012, TASK-013 | **DONE** ✅ | `examples/cloudflare-worker-hono.ts`, `README.md` |
+
+
 
 ---
 
@@ -39,9 +46,9 @@ TODO -> IN_PROGRESS -> REVIEW -> DONE
 
 ## 3. 当前执行焦点
 
-- **当前活跃里程碑**：Milestone 5: 持久化数据库引擎与生态集成
-- **当前任务**：全部任务已顺利达成（`TASK-001` ~ `TASK-010` 均已 **DONE** ✅）
-- **状态总结**：已成功交付原生 SQLite 与 PostgreSQL 持久化数据库存储适配器，以及 NestJS 零 Controller 模块（EasyAuthModule、EasyAuthGuard、@CurrentUser）！全部 108 项测试 100% 通过！
+- **当前活跃里程碑**：Milestone 6: 跨平台多生态解耦、Cloudflare D1 驱动与轻量 Client SDK
+- **当前任务**：`TASK-011: 核心运行时解耦与子路径按需分包体系`
+- **状态总结**：已完成架构设计与技术规格制定，准备启动 TASK-011 执行！
 
 
 

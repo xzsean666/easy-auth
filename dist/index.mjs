@@ -1,29 +1,14 @@
 import { randomUUID, randomBytes, createHmac, timingSafeEqual } from 'crypto';
-import { dirname } from 'path';
-import { mkdirSync } from 'fs';
 import { createRequire } from 'module';
 import { createRemoteJWKSet, jwtVerify, SignJWT, errors } from 'jose';
 import { isAddress, verifyMessage } from 'viem';
-import { Injectable, Inject, Optional, createParamDecorator, Get, Query, Post, Body, Headers, Param, Req, Res, Controller, UseGuards, Global, Module, SetMetadata, UnauthorizedException, HttpException, HttpStatus } from '@nestjs/common';
-import { Reflector, APP_GUARD } from '@nestjs/core';
 
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
   get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
 }) : x)(function(x) {
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
-var __decorateClass = (decorators, target, key, kind) => {
-  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
-  for (var i = decorators.length - 1, decorator; i >= 0; i--)
-    if (decorator = decorators[i])
-      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
-  if (kind && result) __defProp(target, key, result);
-  return result;
-};
-var __decorateParam = (index, decorator) => (target, key) => decorator(target, key, index);
 
 // src/core/errors.ts
 var ERROR_STATUS_MAP = {
@@ -31,6 +16,7 @@ var ERROR_STATUS_MAP = {
   INVALID_CREDENTIALS: 401,
   TOKEN_INVALID: 401,
   TOKEN_EXPIRED: 401,
+  UNAUTHORIZED: 401,
   USER_NOT_FOUND: 404,
   IDENTITY_ALREADY_LINKED: 409,
   CANNOT_UNLINK_LAST_IDENTITY: 400,
@@ -193,6 +179,18 @@ var MemoryStorageAdapter = class {
     this.userIdentities.clear();
   }
 };
+function ensureDirectoryExists(filePath) {
+  try {
+    const req = typeof __require !== "undefined" ? __require : createRequire(import.meta.url);
+    const pathMod = req("node:path");
+    const fsMod = req("node:fs");
+    const dir = pathMod.dirname(filePath);
+    if (dir && dir !== "." && typeof fsMod.mkdirSync === "function") {
+      fsMod.mkdirSync(dir, { recursive: true });
+    }
+  } catch {
+  }
+}
 function getDatabaseSyncClass() {
   try {
     const req = typeof __require !== "undefined" ? __require : createRequire(import.meta.url);
@@ -215,10 +213,7 @@ var SqliteStorageAdapter = class {
     } else {
       const location = options?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
       if (location !== ":memory:" && !location.startsWith("file::memory:")) {
-        const dir = dirname(location);
-        if (dir && dir !== ".") {
-          mkdirSync(dir, { recursive: true });
-        }
+        ensureDirectoryExists(location);
       }
       const DB = getDatabaseSyncClass();
       this.db = new DB(location);
@@ -1177,9 +1172,16 @@ var EasyAuth = class {
       });
     } else if (options.database?.type === "memory") {
       this.storage = new MemoryStorageAdapter();
-    } else {
-      const dbPath = options.database?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
+    } else if (options.database?.type === "sqlite") {
+      const dbPath = options.database.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
       this.storage = new SqliteStorageAdapter({ path: dbPath });
+    } else {
+      try {
+        const dbPath = options.database?.path || process.env.EASY_AUTH_DB_PATH || "./easy-auth.sqlite";
+        this.storage = new SqliteStorageAdapter({ path: dbPath });
+      } catch {
+        this.storage = new MemoryStorageAdapter();
+      }
     }
     this.jwt = new JwtService(options.jwt);
     this.registry = new ProviderRegistry();
@@ -2012,542 +2014,9 @@ var TotpProvider = class _TotpProvider {
   }
 };
 
-// src/nestjs/constants.ts
-var EASY_AUTH_OPTIONS = "EASY_AUTH_OPTIONS";
-var IS_PUBLIC_KEY = "easy_auth:is_public";
-var EasyAuthService = class {
-  constructor(options) {
-    this.options = options;
-    this.auth = new EasyAuth(options);
-  }
-  options;
-  auth;
-  /**
-   * Authenticate a user with third-party credentials.
-   */
-  async authenticate(provider, credentials) {
-    return this.auth.authenticate(provider, credentials);
-  }
-  /**
-   * Verify an incoming JWT bearer token and extract user & metadata.
-   */
-  async verify(token, options) {
-    return this.auth.verify(token, options);
-  }
-  /**
-   * Link a new third-party identity to an existing user account.
-   */
-  async linkIdentity(userId, provider, credentials) {
-    return this.auth.linkIdentity(userId, provider, credentials);
-  }
-  /**
-   * Unlink a third-party identity with anti-lockout protection.
-   */
-  async unlinkIdentity(userId, provider, providerUserId) {
-    return this.auth.unlinkIdentity(userId, provider, providerUserId);
-  }
-  /**
-   * Get user by ID.
-   */
-  async getUser(id) {
-    return this.auth.storage.getUserById(id);
-  }
-  /**
-   * List all identities linked to a user.
-   */
-  async listIdentities(userId) {
-    return this.auth.storage.listIdentitiesByUserId(userId);
-  }
-  /**
-   * Generates a single-use cryptographically random nonce for Web3 authentication anti-replay.
-   */
-  generateNonce(address, ttlMs) {
-    return this.auth.generateNonce(address, ttlMs);
-  }
-  /**
-   * Validates and consumes a single-use nonce.
-   */
-  consumeNonce(nonce, address) {
-    return this.auth.consumeNonce(nonce, address);
-  }
-  /**
-   * Updates user metadata.
-   */
-  async updateUserMetadata(userId, patch) {
-    return this.auth.updateUserMetadata(userId, patch);
-  }
-  /**
-   * Alias for updateUserMetadata.
-   */
-  async updateMetadata(userId, patch) {
-    return this.auth.updateUserMetadata(userId, patch);
-  }
-  /**
-   * Obtains OAuth redirection authorization URL for supported providers.
-   */
-  getAuthorizationUrl(providerName, options) {
-    return this.auth.getAuthorizationUrl(providerName, options);
-  }
-};
-EasyAuthService = __decorateClass([
-  Injectable(),
-  __decorateParam(0, Inject(EASY_AUTH_OPTIONS))
-], EasyAuthService);
-var EasyAuthGuard = class {
-  constructor(authService, reflector) {
-    this.authService = authService;
-    this.reflector = reflector;
-  }
-  authService;
-  reflector;
-  async canActivate(context) {
-    if (this.reflector) {
-      const isPublic = this.reflector.getAllAndOverride(IS_PUBLIC_KEY, [
-        context.getHandler(),
-        context.getClass()
-      ]);
-      if (isPublic) {
-        return true;
-      }
-    }
-    const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers?.authorization;
-    if (!authHeader || typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
-      throw new UnauthorizedException("Missing or malformed Authorization header with Bearer token");
-    }
-    const token = authHeader.slice(7).trim();
-    if (!token) {
-      throw new UnauthorizedException("Empty Bearer token provided");
-    }
-    try {
-      const verifyResult = await this.authService.verify(token);
-      request.user = verifyResult.user;
-      request.userId = verifyResult.userId;
-      request.userMetadata = verifyResult.metadata;
-      request.authPayload = verifyResult.payload;
-      return true;
-    } catch (err) {
-      throw new UnauthorizedException(err.message || "Invalid or expired authentication token");
-    }
-  }
-};
-EasyAuthGuard = __decorateClass([
-  Injectable(),
-  __decorateParam(0, Inject(EasyAuthService)),
-  __decorateParam(1, Optional()),
-  __decorateParam(1, Inject(Reflector))
-], EasyAuthGuard);
-var CurrentUser = createParamDecorator(
-  (data, ctx) => {
-    const request = ctx.switchToHttp().getRequest();
-    const user = request.user;
-    if (!user) {
-      return null;
-    }
-    return data ? user[data] : user;
-  }
-);
-var Public = () => SetMetadata(IS_PUBLIC_KEY, true);
-
-// src/nestjs/easy-auth.controller.ts
-var EasyAuthController = class {
-  constructor(authService) {
-    this.authService = authService;
-  }
-  authService;
-  handleError(err) {
-    if (err instanceof EasyAuthError) {
-      throw new HttpException(
-        {
-          statusCode: err.statusCode,
-          error: err.code,
-          message: err.message
-        },
-        err.statusCode
-      );
-    }
-    throw new HttpException(
-      {
-        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: err?.message || "Internal authentication error"
-      },
-      HttpStatus.INTERNAL_SERVER_ERROR
-    );
-  }
-  getNonce(address) {
-    const nonce = this.authService.generateNonce(address);
-    return {
-      statusCode: HttpStatus.OK,
-      nonce,
-      address: address ? address.toLowerCase() : void 0,
-      expiresIn: 300
-    };
-  }
-  async login(body) {
-    const loginType = body?.loginType || body?.type || body?.provider;
-    if (!loginType || !body?.credentials) {
-      throw new HttpException(
-        { statusCode: 400, error: "BAD_REQUEST", message: "Missing loginType (or provider) and credentials in request body" },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    try {
-      const result = await this.authService.authenticate(loginType, body.credentials);
-      return {
-        statusCode: HttpStatus.OK,
-        loginType: result.loginType,
-        user: result.user,
-        token: result.token,
-        isNewUser: result.isNewUser,
-        identity: result.identity
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  async link(body, currentUserId) {
-    const provider = body?.loginType || body?.type || body?.provider;
-    if (!provider || !body?.credentials) {
-      throw new HttpException(
-        { statusCode: 400, error: "BAD_REQUEST", message: "Missing loginType (or provider), or credentials in request body" },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    if (body?.userId && currentUserId && body.userId !== currentUserId) {
-      throw new HttpException(
-        { statusCode: 403, error: "FORBIDDEN", message: "Cannot link identity to another user account" },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const targetUserId = currentUserId || body?.userId;
-    if (!targetUserId) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to link an identity" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-    try {
-      const identity = await this.authService.linkIdentity(targetUserId, provider, body.credentials);
-      return {
-        statusCode: HttpStatus.OK,
-        identity
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  async unlink(body, currentUserId) {
-    const provider = body?.loginType || body?.type || body?.provider;
-    if (!provider || !body?.providerUserId) {
-      throw new HttpException(
-        { statusCode: 400, error: "BAD_REQUEST", message: "Missing loginType (or provider), or providerUserId in request body" },
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    if (body?.userId && currentUserId && body.userId !== currentUserId) {
-      throw new HttpException(
-        { statusCode: 403, error: "FORBIDDEN", message: "Cannot unlink identity from another user account" },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const targetUserId = currentUserId || body?.userId;
-    if (!targetUserId) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to unlink an identity" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-    try {
-      await this.authService.unlinkIdentity(targetUserId, provider, body.providerUserId);
-      return {
-        statusCode: HttpStatus.OK,
-        success: true
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  async me(authHeader, user) {
-    if (user) {
-      return {
-        statusCode: HttpStatus.OK,
-        userId: user.id,
-        user,
-        metadata: user.metadata
-      };
-    }
-    if (!authHeader?.startsWith("Bearer ")) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Missing or invalid Authorization header" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-    const token = authHeader.slice(7).trim();
-    try {
-      const result = await this.authService.verify(token);
-      return {
-        statusCode: HttpStatus.OK,
-        userId: result.userId,
-        user: result.user,
-        metadata: result.metadata
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  async listIdentities(userId, currentUserId) {
-    if (userId && currentUserId && userId !== currentUserId) {
-      throw new HttpException(
-        { statusCode: 403, error: "FORBIDDEN", message: "Cannot view identities of another user account" },
-        HttpStatus.FORBIDDEN
-      );
-    }
-    const targetUserId = currentUserId || userId;
-    if (!targetUserId) {
-      throw new HttpException(
-        { statusCode: 401, error: "UNAUTHORIZED", message: "Authentication required to view identities" },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-    try {
-      const identities = await this.authService.listIdentities(targetUserId);
-      return {
-        statusCode: HttpStatus.OK,
-        identities
-      };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  startOAuthByPath(provider, redirect, req, res) {
-    return this.executeOAuthRedirect(provider, redirect, req, res);
-  }
-  googleOAuth(redirect, req, res) {
-    return this.executeOAuthRedirect("google", redirect, req, res);
-  }
-  lineOAuth(redirect, req, res) {
-    return this.executeOAuthRedirect("line", redirect, req, res);
-  }
-  githubOAuth(redirect, req, res) {
-    return this.executeOAuthRedirect("github", redirect, req, res);
-  }
-  executeOAuthRedirect(provider, redirect, req, res) {
-    const protocol = req?.headers?.["x-forwarded-proto"] || req?.protocol || "https";
-    const host = req?.headers?.["x-forwarded-host"] || req?.get?.("host") || req?.headers?.host || "localhost";
-    const defaultCallbackUri = `${protocol}://${host}/api/auth/callback/${provider}`;
-    const envCallback = process.env[`${provider.toUpperCase()}_REDIRECT_URI`] || process.env.AUTH_CALLBACK_URL;
-    const backendCallbackUri = envCallback || defaultCallbackUri;
-    const targetRedirect = redirect || process.env.FRONTEND_URL || process.env.DEFAULT_FRONTEND_URL || `${protocol}://${host}`;
-    const statePayload = Buffer.from(
-      JSON.stringify({ redirect: targetRedirect, provider })
-    ).toString("base64url");
-    try {
-      const authUrl = this.authService.getAuthorizationUrl(provider, {
-        redirectUri: backendCallbackUri,
-        state: statePayload
-      });
-      if (res && typeof res.redirect === "function") {
-        return res.redirect(authUrl);
-      }
-      return { statusCode: HttpStatus.FOUND, url: authUrl };
-    } catch (err) {
-      this.handleError(err);
-    }
-  }
-  async handleOAuthCallback(provider, code, state, error, errorDescription, req, res) {
-    const protocol = req?.headers?.["x-forwarded-proto"] || req?.protocol || "https";
-    const host = req?.headers?.["x-forwarded-host"] || req?.get?.("host") || req?.headers?.host || "localhost";
-    let targetRedirect = process.env.FRONTEND_URL || process.env.DEFAULT_FRONTEND_URL || `${protocol}://${host}`;
-    if (state) {
-      try {
-        const decoded = JSON.parse(Buffer.from(state, "base64url").toString("utf8"));
-        if (decoded && typeof decoded.redirect === "string") {
-          targetRedirect = decoded.redirect;
-        }
-      } catch (err) {
-      }
-    }
-    const appendParam = (url, key, value) => {
-      const separator = url.includes("?") ? "&" : "?";
-      return `${url}${separator}${key}=${encodeURIComponent(value)}`;
-    };
-    if (error || !code) {
-      const errorMsg = errorDescription || error || `Authentication with ${provider} was cancelled or failed`;
-      const errorUrl = appendParam(targetRedirect, "error", errorMsg);
-      if (res && typeof res.redirect === "function") {
-        return res.redirect(errorUrl);
-      }
-      return { statusCode: HttpStatus.FOUND, url: errorUrl, error: errorMsg };
-    }
-    try {
-      const defaultCallbackUri = `${protocol}://${host}/api/auth/callback/${provider}`;
-      const envCallback = process.env[`${provider.toUpperCase()}_REDIRECT_URI`] || process.env.AUTH_CALLBACK_URL;
-      const backendCallbackUri = envCallback || defaultCallbackUri;
-      const result = await this.authService.authenticate(provider, {
-        code,
-        redirectUri: backendCallbackUri
-      });
-      let successUrl = appendParam(targetRedirect, "token", result.token);
-      successUrl = appendParam(successUrl, "userId", result.user.id);
-      if (result.isNewUser) {
-        successUrl = appendParam(successUrl, "isNewUser", "true");
-      }
-      if (res && typeof res.redirect === "function") {
-        return res.redirect(successUrl);
-      }
-      return {
-        statusCode: HttpStatus.FOUND,
-        url: successUrl,
-        token: result.token,
-        userId: result.user.id
-      };
-    } catch (err) {
-      const errorUrl = appendParam(targetRedirect, "error", err.message || "Authentication exchange failed");
-      if (res && typeof res.redirect === "function") {
-        return res.redirect(errorUrl);
-      }
-      return { statusCode: HttpStatus.FOUND, url: errorUrl, error: err.message };
-    }
-  }
-};
-__decorateClass([
-  Public(),
-  Get("nonce"),
-  __decorateParam(0, Query("address"))
-], EasyAuthController.prototype, "getNonce", 1);
-__decorateClass([
-  Public(),
-  Post("login"),
-  __decorateParam(0, Body())
-], EasyAuthController.prototype, "login", 1);
-__decorateClass([
-  Post("link"),
-  __decorateParam(0, Body()),
-  __decorateParam(1, CurrentUser("id"))
-], EasyAuthController.prototype, "link", 1);
-__decorateClass([
-  Post("unlink"),
-  __decorateParam(0, Body()),
-  __decorateParam(1, CurrentUser("id"))
-], EasyAuthController.prototype, "unlink", 1);
-__decorateClass([
-  Get("me"),
-  __decorateParam(0, Headers("authorization")),
-  __decorateParam(1, CurrentUser())
-], EasyAuthController.prototype, "me", 1);
-__decorateClass([
-  Get("identities"),
-  __decorateParam(0, Query("userId")),
-  __decorateParam(1, CurrentUser("id"))
-], EasyAuthController.prototype, "listIdentities", 1);
-__decorateClass([
-  Public(),
-  Get("oauth/:provider"),
-  __decorateParam(0, Param("provider")),
-  __decorateParam(1, Query("redirect")),
-  __decorateParam(2, Req()),
-  __decorateParam(3, Res())
-], EasyAuthController.prototype, "startOAuthByPath", 1);
-__decorateClass([
-  Public(),
-  Get("google"),
-  __decorateParam(0, Query("redirect")),
-  __decorateParam(1, Req()),
-  __decorateParam(2, Res())
-], EasyAuthController.prototype, "googleOAuth", 1);
-__decorateClass([
-  Public(),
-  Get("line"),
-  __decorateParam(0, Query("redirect")),
-  __decorateParam(1, Req()),
-  __decorateParam(2, Res())
-], EasyAuthController.prototype, "lineOAuth", 1);
-__decorateClass([
-  Public(),
-  Get("github"),
-  __decorateParam(0, Query("redirect")),
-  __decorateParam(1, Req()),
-  __decorateParam(2, Res())
-], EasyAuthController.prototype, "githubOAuth", 1);
-__decorateClass([
-  Public(),
-  Get("callback/:provider"),
-  __decorateParam(0, Param("provider")),
-  __decorateParam(1, Query("code")),
-  __decorateParam(2, Query("state")),
-  __decorateParam(3, Query("error")),
-  __decorateParam(4, Query("error_description")),
-  __decorateParam(5, Req()),
-  __decorateParam(6, Res())
-], EasyAuthController.prototype, "handleOAuthCallback", 1);
-EasyAuthController = __decorateClass([
-  Controller("api/auth"),
-  UseGuards(EasyAuthGuard),
-  __decorateParam(0, Inject(EasyAuthService))
-], EasyAuthController);
-
-// src/nestjs/easy-auth.module.ts
-var EasyAuthModule = class {
-  /**
-   * Synchronous static registration of EasyAuthModule.
-   */
-  static forRoot(options) {
-    if (options.routePrefix) {
-      const cleanPrefix = options.routePrefix.replace(/^\/+|\/+$/g, "");
-      Reflect.defineMetadata("path", cleanPrefix, EasyAuthController);
-    }
-    const controllers = options.disableController ? [] : [EasyAuthController];
-    const providers = [
-      {
-        provide: EASY_AUTH_OPTIONS,
-        useValue: options
-      },
-      EasyAuthService,
-      EasyAuthGuard
-    ];
-    if (options.globalGuard) {
-      providers.push({
-        provide: APP_GUARD,
-        useClass: EasyAuthGuard
-      });
-    }
-    return {
-      module: EasyAuthModule,
-      controllers,
-      providers,
-      exports: [EasyAuthService, EasyAuthGuard]
-    };
-  }
-  /**
-   * Asynchronous registration of EasyAuthModule using factory function.
-   */
-  static forRootAsync(asyncOptions) {
-    const providers = [
-      {
-        provide: EASY_AUTH_OPTIONS,
-        useFactory: asyncOptions.useFactory,
-        inject: asyncOptions.inject || []
-      },
-      EasyAuthService,
-      EasyAuthGuard
-    ];
-    return {
-      module: EasyAuthModule,
-      imports: asyncOptions.imports || [],
-      controllers: [EasyAuthController],
-      providers,
-      exports: [EasyAuthService, EasyAuthGuard]
-    };
-  }
-};
-EasyAuthModule = __decorateClass([
-  Global(),
-  Module({})
-], EasyAuthModule);
-
 // src/index.ts
 var VERSION = "0.1.0";
 
-export { AuthEngine, CurrentUser, EasyAuth, EasyAuthController, EasyAuthError, EasyAuthGuard, EasyAuthModule, EasyAuthService, TotpProvider as GoogleOtpProvider, GoogleProvider, JwtService, LineProvider, MemoryStorageAdapter, OAuth2BaseProvider, PostgresStorageAdapter, ProviderRegistry, Public, SqliteStorageAdapter, TotpProvider, VERSION, Web3Provider, base32Decode, base32Encode };
+export { AuthEngine, EasyAuth, EasyAuthError, TotpProvider as GoogleOtpProvider, GoogleProvider, JwtService, LineProvider, MemoryStorageAdapter, OAuth2BaseProvider, PostgresStorageAdapter, ProviderRegistry, SqliteStorageAdapter, TotpProvider, VERSION, Web3Provider, base32Decode, base32Encode };
 //# sourceMappingURL=index.mjs.map
 //# sourceMappingURL=index.mjs.map

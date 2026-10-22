@@ -101,11 +101,18 @@ flowchart TD
 ### 2.6 存储抽象层 (`src/storage/`)
 - 提供统一接口 `StorageAdapter`。
 - 默认提供 `MemoryStorageAdapter`：采用 `Map<string, User>` 和双索引 `Map<string, Identity>`，确保本地测试与无数据库环境 0 成本启动运行。
+- 提供 `D1StorageAdapter`（`easy-auth/d1`）：基于 Cloudflare 原生 D1，支持 RYW Sessions 与 Batch 优化（参考 `cloudlflare-worker-kvdb`）。
+- 提供 `SqliteStorageAdapter` 与 `PostgresStorageAdapter`：支持 Node 22 原生 SQLite 与通用 PostgreSQL。
+
+### 2.7 客户端前端 SDK (`src/client/`)
+- 提供框架无关的 `EasyAuthClient`（`easy-auth/client`）。
+- 内置 `TokenStorageAdapter` 与响应式 `onAuthStateChange`，提供自动鉴权包装的 `client.fetch()`。
 
 ---
 
 ## 3. 核心设计约束 (面向 AI)
 
-1. **零全局变量**：所有状态均挂载在 `EasyAuth` 实例上下文中，支持同一 Node.js 进程内创建多个隔离的 EasyAuth 实例（例如多租户场景）。
+1. **零全局变量**：所有状态均挂载在 `EasyAuth` 实例上下文中，支持同一环境内创建多个隔离的 EasyAuth 实例（例如多租户场景）。
 2. **异步非阻塞**：所有对外方法均返回 `Promise`，便于后续无缝迁移至各类异步网络数据库与分布式存储。
 3. **输入数据清洗**：例如 Web3 地址必须由 Provider 统一处理为小写（`address.toLowerCase()`），避免因大小写不一致导致同地址被注册两次。
+4. **子路径解耦约束**：核心主入口（`src/index.ts`）绝对禁止引入任何特定框架库（如 NestJS）或环境专有阻断模块（如静态 `node:fs`），保障主入口 100% 具备 Edge / Cloudflare Workers 兼容性。

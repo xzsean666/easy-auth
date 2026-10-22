@@ -149,4 +149,48 @@
 - **后果**:
   - 开发者无论是初次初始化、写测试用例还是上线运行，用户数据默认 100% 写入磁盘 SQLite 数据库，彻底保障数据持久不丢失。
 
+---
+
+## ADR-013: 跨平台解耦与按需分包架构（Universal Core + Subpath Exports）
+
+- **状态**: Accepted (已采纳)
+- **背景**: 开发者反馈需要支持不同平台（Node.js, Cloudflare Workers, Next.js, 浏览器等）。若把 NestJS、Node 原生 `fs`、`node:sqlite` 全部打进主入口，会导致在 Cloudflare Workers 或无 NestJS 环境下构建和运行时直接崩溃。
+- **决策**:
+  - 拆分主包与子路径导出（Subpath Exports），实现“用什么装什么、用什么引什么”：
+    1. `easy-auth`（主入口）：作为 **Universal Core**，纯 TypeScript，零 Node.js 专有模块，完全兼容 Edge/Workers/Browser/Node。
+    2. `easy-auth/nestjs`：独立子路径，仅供 NestJS 开发者引入，不污染通用核心。
+    3. `easy-auth/d1`：独立子路径，提供 Cloudflare D1 存储适配器。
+    4. `easy-auth/client`：独立子路径，提供轻量框架无关的前端 SDK。
+    5. Node.js 22 的 `SqliteStorageAdapter` 在主入口中采用动态安全检测或作为独立模块提供，绝不导致 Edge 环境顶层静态 import `fs`。
+- **后果**:
+  - 核心库体积极度精简，天然 Edge-ready；各个框架用户按需导入对应子路径。
+
+---
+
+## ADR-014: Cloudflare D1 存储适配器与 Read-Your-Own-Writes (RYW) Session 机制
+
+- **状态**: Accepted (已采纳)
+- **背景**: Cloudflare D1 拥有分布式多副本读取架构，异步副本间存在短暂的同步延迟。在多身份关联或用户刚注册的场景下，若立即查询用户，可能由于只读副本尚未同步导致短暂读不到数据（脏读）。此外，多次逐条执行 SQL 的网络 RPC 开销较大。参考 `/ssd0/git/cloudlflare-worker-kvdb` 的优秀实践，D1 具有强大的 Session Bookmark 与 Batch 特性。
+- **决策**:
+  - 实现 `D1StorageAdapter`，实现标准的 `StorageAdapter` 接口。
+  - 引入 `D1SessionManager`，支持 `db.withSession(bookmark)`，自动维护 session bookmark，保障 RYW（读写自身一致性）。
+  - Auto-DDL 建表使用 `rawDb.batch([stmt1, stmt2, stmt3])` 一次网络 RPC 完成。
+- **后果**:
+  - 为 Cloudflare Workers / Pages 提供生产级、无脏读、极速响应的认证持久化方案。
+
+---
+
+## ADR-015: 框架无关、易扩展的前端客户端 SDK 架构 (`easy-auth/client`)
+
+- **状态**: Accepted (已采纳)
+- **背景**: 开发者希望前端也是最易扩展的，同时未来支持不同的前端框架（React, Vue, Svelte, Next.js 前端）。
+- **决策**:
+  - 在 `easy-auth/client` 中构建轻量核心 `EasyAuthClient`，不绑定任何特定 UI 框架（Vanilla JS / TS）。
+  - 设计可插拔存储：`TokenStorageAdapter` 接口（默认 `LocalStorageAdapter`，并提供 `MemoryTokenStorage`、`CookieTokenStorage`）。
+  - 提供状态监听：`client.onAuthStateChange((user) => ...)`。
+  - 提供自动附加鉴权 Header 和 401 自动拦截处理的 `client.fetch(input, init)`。
+  - 设计插件化 Provider 触发模式，让 UI 组件或后续 React Hook（如 `useEasyAuth`）可以在 10 行代码内极简包裹。
+- **后果**:
+  - 前端拥有坚固可复用、极小体积且零框架绑定的底层 SDK，可轻松拓展到任何前端技术栈。
+
 
